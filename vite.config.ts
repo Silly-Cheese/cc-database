@@ -5,6 +5,8 @@ export default defineConfig({
   plugins: [react()],
   base: '/cc-database/',
   build: {
+    outDir: 'docs',
+    emptyOutDir: true,
     sourcemap: true,
   },
 });
