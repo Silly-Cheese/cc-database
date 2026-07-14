@@ -1,1 +1,4 @@
-{"indexes":[{"collectionGroup":"auditLogs","queryScope":"COLLECTION","fields":[{"fieldPath":"createdAt","order":"DESCENDING"},{"fieldPath":"actorUid","order":"ASCENDING"}]},{"collectionGroup":"activationCodes","queryScope":"COLLECTION","fields":[{"fieldPath":"status","order":"ASCENDING"},{"fieldPath":"expiresAt","order":"ASCENDING"}]}],"fieldOverrides":[]}
+{
+  "indexes": [],
+  "fieldOverrides": []
+}
