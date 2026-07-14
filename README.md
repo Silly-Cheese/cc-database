@@ -1,12 +1,11 @@
 # Canela Corporation Database Portal
 
-The Canela Portal is a React, TypeScript, Firebase Authentication, and Cloud Firestore application for managing Canela staff and organizational operations. The frontend is intended to be deployed through GitHub rather than Firebase Hosting.
+The Canela Portal is a React and TypeScript application that uses Firebase Authentication and Cloud Firestore only. The frontend is deployed through GitHub-based static hosting. Firebase Hosting, Cloud Functions, Cloud Storage, Messaging, and Emulator configuration are not included.
 
 ## Completed generation phases
 
 ### Phase 1 — Foundation and authentication
 
-- Firebase web connection without Firebase Hosting
 - Username/password authentication without collecting user email addresses
 - One-time activation codes and persistent cross-device sign-in
 - Protected routes, account statuses, technical roles, and audit foundations
@@ -28,20 +27,11 @@ The Canela Portal is a React, TypeScript, Firebase Authentication, and Cloud Fir
 
 ### Phase 4 — Workforce development and HR
 
-- Course creation, training assignment, progress, passing scores, and monthly requirements
+- Course creation, assignments, progress, passing scores, and monthly training requirements
 - Certification issue, expiration, and renewal tracking
-- Performance reviews with seven scored categories and approval workflows
-- Measurable staff goals with progress and deadlines
-- Recognition badges, awards, and commendations
-- Leave-request submission and approval
-- Meeting, training, event, and roll-call attendance
-- Document library for policies, handbooks, guides, manuals, and SOPs
-- Internal digital forms for incidents, complaints, suggestions, transfers, resignations, and exit interviews
-- Direct, department, leadership, and organization-wide messaging
-- Notification center and read tracking
-- Employee timeline and configurable dashboard-layout collection foundations
-- Responsive Compliance and Workforce module launchers
-- Expanded Phase 4 Firestore Security Rules
+- Performance reviews, goals, recognition, leave, and attendance
+- Document library, internal forms, messaging, notifications, and employee timelines
+- Responsive Compliance and Workforce modules
 
 ## Local setup
 
@@ -49,23 +39,42 @@ The Canela Portal is a React, TypeScript, Firebase Authentication, and Cloud Fir
 2. Run `npm install`.
 3. In Firebase Authentication, enable **Email/Password** and **Anonymous** providers.
 4. Create Cloud Firestore in production mode.
-5. Install the Firebase CLI and sign in.
-6. Deploy only Firestore rules and indexes with `firebase deploy --only firestore`.
-7. Run `npm run dev`.
+5. Run `npm run dev`.
+
+## Firestore configuration
+
+The Firebase CLI configuration contains Firestore only:
+
+```json
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  }
+}
+```
+
+Deploy only the security rules when they change:
+
+```bash
+firebase deploy --only firestore:rules
+```
+
+`firestore.indexes.json` contains no composite indexes. Firestore's automatic single-field indexes are used instead. Portal queries should avoid compound filter-and-sort combinations that require composite indexes; manageable result sets are filtered and sorted in the React client.
 
 ## Deployment
 
-Firebase Hosting is not configured or used. Build the static frontend with:
+Build the static frontend with:
 
 ```bash
 npm run build
 ```
 
-Deploy the generated `dist` directory using the GitHub-based hosting workflow selected for the project. Firebase supplies Authentication and Firestore only.
+Deploy the generated `dist` directory through the selected GitHub-based hosting workflow. Firebase Hosting is not configured or used.
 
 ## Authentication model
 
-Users enter only a Canela portal username. Internally, the application maps it to a non-deliverable Firebase Auth alias ending in `@accounts.canela.internal`. No user email address is collected, displayed, or used for recovery.
+Users enter only a Canela portal username. Internally, the application maps it to a non-deliverable Firebase Authentication alias ending in `@accounts.canela.internal`. No user email address is collected, displayed, or used for recovery.
 
 An administrator creates a SHA-256 activation-code document in `activationCodes`. The user redeems it once, chooses a username and password, and may then sign in from any device.
 
@@ -113,32 +122,6 @@ messages.manage
 audit.read
 ```
 
-## Phase 4 Firestore collections
-
-```text
-courses
-courseAssignments
-courseAttempts
-courseCertificates
-trainingRequirements
-certifications
-performanceReviews
-reviewTemplates
-goalAssignments
-recognitions
-leaveRequests
-attendanceRecords
-documents
-documentVersions
-formResponses
-internalMessages
-notifications
-dashboardLayouts
-employeeTimeline
-```
-
-Existing collections from Phases 1–3 remain in use.
-
 ## Security note
 
-The Firebase web API key is public application configuration. Security depends on Firebase Authentication, App Check, authorized domains, and Firestore Security Rules. Configure App Check and authorized domains before launch.
+The Firebase web API key is public application configuration. Security depends on Firebase Authentication, authorized domains, and Firestore Security Rules. Only Authentication and Firestore are initialized by the application.
