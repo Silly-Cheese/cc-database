@@ -1,12 +1,12 @@
 # Canela Corporation Database Portal
 
-The Canela Portal is a React, TypeScript, Firebase Authentication, and Cloud Firestore application for managing Canela staff and organizational operations.
+The Canela Portal is a React, TypeScript, Firebase Authentication, and Cloud Firestore application for managing Canela staff and organizational operations. The frontend is intended to be deployed through GitHub rather than Firebase Hosting.
 
 ## Completed generation phases
 
 ### Phase 1 — Foundation and authentication
 
-- Firebase connection and Hosting configuration
+- Firebase web connection without Firebase Hosting
 - Username/password authentication without collecting user email addresses
 - One-time activation codes
 - Persistent cross-device sign-in
@@ -28,7 +28,17 @@ The Canela Portal is a React, TypeScript, Firebase Authentication, and Cloud Fir
 - Quota activity submissions, evidence links, review, and point totals
 - Organization-wide announcements with priority and audience fields
 - Responsive desktop and mobile navigation
-- Expanded Firestore Security Rules for every Phase 2 collection
+
+### Phase 3 — Compliance, alliances, and applications
+
+- Offence-definition data model
+- Disciplinary case creation, evidence links, recommendations, and final actions
+- Blacklist registry with Roblox and Discord identity fields
+- Appeal review and full, partial, or denied decisions
+- Alliance profiles, representatives, partnership statuses, and strike tracking
+- Application review, acceptance, denial, and waitlisting
+- Granular Phase 3 permissions and Firestore Security Rules
+- Protected compliance workspace linked from the signed-in portal
 
 ## Local setup
 
@@ -37,8 +47,18 @@ The Canela Portal is a React, TypeScript, Firebase Authentication, and Cloud Fir
 3. In Firebase Authentication, enable **Email/Password** and **Anonymous** providers.
 4. Create Cloud Firestore in production mode.
 5. Install the Firebase CLI and sign in.
-6. Deploy rules and indexes with `firebase deploy --only firestore`.
+6. Deploy only Firestore rules and indexes with `firebase deploy --only firestore`.
 7. Run `npm run dev`.
+
+## Deployment
+
+Firebase Hosting is not configured or used. Build the static frontend with:
+
+```bash
+npm run build
+```
+
+Deploy the generated `dist` directory using the GitHub-based hosting workflow selected for the project. The Firebase project supplies Authentication and Firestore only.
 
 ## Authentication model
 
@@ -61,7 +81,7 @@ Create the first Firebase Authentication account with the internal alias, then c
 }
 ```
 
-`SYSTEM_ADMINISTRATOR` automatically satisfies Phase 2 management permission checks. Other accounts may receive any of these granular permissions:
+`SYSTEM_ADMINISTRATOR` satisfies every portal management permission check. Granular permissions include:
 
 ```text
 staff.manage
@@ -69,10 +89,15 @@ organization.manage
 personnel.approve
 quotas.review
 announcements.manage
+discipline.manage
+blacklists.manage
+appeals.review
+alliances.manage
+applications.review
 audit.read
 ```
 
-## Phase 2 Firestore collections
+## Firestore collections
 
 ```text
 staffProfiles
@@ -82,6 +107,12 @@ teams
 personnelActions
 quotaSubmissions
 announcements
+offenceDefinitions
+disciplinaryCases
+blacklists
+appeals
+alliances
+applications
 portalAccounts
 portalUsernames
 activationCodes
