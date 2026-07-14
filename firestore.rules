@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn(){ return request.auth != null; }
+    function account(){ return get(/databases/$(database)/documents/portalAccounts/$(request.auth.uid)).data; }
+    function active(){ return signedIn() && account().portalStatus == 'ACTIVE'; }
+    function sysAdmin(){ return active() && 'SYSTEM_ADMINISTRATOR' in account().systemRoles; }
+
+    match /portalAccounts/{uid} {
+      allow read: if active() && (request.auth.uid == uid || sysAdmin());
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.portalStatus == 'ACTIVE'
+        && request.resource.data.systemRoles.size() == 0;
+      allow update: if sysAdmin();
+      allow delete: if false;
+    }
+    match /portalUsernames/{username} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid && !exists(/databases/$(database)/documents/portalUsernames/$(username));
+      allow update, delete: if false;
+    }
+    match /activationCodes/{codeHash} {
+      allow get: if signedIn();
+      allow list: if sysAdmin();
+      allow create: if sysAdmin();
+      allow update: if signedIn()
+        && resource.data.status == 'PENDING'
+        && request.resource.data.status == 'USED'
+        && request.resource.data.usedByUid == request.auth.uid
+        && request.resource.data.staffProfileId == resource.data.staffProfileId;
+      allow delete: if sysAdmin();
+    }
+    match /auditLogs/{id} {
+      allow read: if sysAdmin();
+      allow create: if active() && request.resource.data.actorUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+    match /systemSettings/{id} { allow read: if active(); allow write: if sysAdmin(); }
+    match /{document=**} { allow read, write: if false; }
+  }
+}
