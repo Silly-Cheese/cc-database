@@ -2,21 +2,29 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn(){ return request.auth != null; }
-    function account(){ return get(/databases/$(database)/documents/portalAccounts/$(request.auth.uid)).data; }
-    function active(){ return signedIn() && account().portalStatus == 'ACTIVE'; }
+    function accountPath(uid){ return /databases/$(database)/documents/portalAccounts/$(uid); }
+    function account(){ return get(accountPath(request.auth.uid)).data; }
+    function accountAfter(){ return getAfter(accountPath(request.auth.uid)).data; }
+    function active(){ return signedIn() && exists(accountPath(request.auth.uid)) && account().portalStatus == 'ACTIVE'; }
     function sysAdmin(){ return active() && 'SYSTEM_ADMINISTRATOR' in account().systemRoles; }
 
     match /portalAccounts/{uid} {
       allow read: if active() && (request.auth.uid == uid || sysAdmin());
-      allow create: if signedIn() && request.auth.uid == uid
+      allow create: if signedIn()
+        && request.auth.uid == uid
         && request.resource.data.portalStatus == 'ACTIVE'
-        && request.resource.data.systemRoles.size() == 0;
+        && request.resource.data.systemRoles.size() == 0
+        && request.resource.data.activationCodeHash is string
+        && getAfter(/databases/$(database)/documents/activationCodes/$(request.resource.data.activationCodeHash)).data.status == 'USED'
+        && getAfter(/databases/$(database)/documents/activationCodes/$(request.resource.data.activationCodeHash)).data.usedByUid == request.auth.uid;
       allow update: if sysAdmin();
       allow delete: if false;
     }
     match /portalUsernames/{username} {
       allow read: if signedIn();
-      allow create: if signedIn() && request.resource.data.uid == request.auth.uid && !exists(/databases/$(database)/documents/portalUsernames/$(username));
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && !exists(/databases/$(database)/documents/portalUsernames/$(username));
       allow update, delete: if false;
     }
     match /activationCodes/{codeHash} {
@@ -32,10 +40,15 @@ service cloud.firestore {
     }
     match /auditLogs/{id} {
       allow read: if sysAdmin();
-      allow create: if active() && request.resource.data.actorUid == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.actorUid == request.auth.uid
+        && accountAfter().portalStatus == 'ACTIVE';
       allow update, delete: if false;
     }
-    match /systemSettings/{id} { allow read: if active(); allow write: if sysAdmin(); }
+    match /systemSettings/{id} {
+      allow read: if active();
+      allow write: if sysAdmin();
+    }
     match /{document=**} { allow read, write: if false; }
   }
 }
