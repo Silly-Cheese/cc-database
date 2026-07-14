@@ -31,6 +31,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Repair generated listener syntax
+        run: node scripts/fix-generated-syntax.mjs
+
       - name: Build compiled site into docs
         run: npx vite build
 
