@@ -5,13 +5,80 @@ service cloud.firestore {
     function accountExists(){ return signedIn() && exists(/databases/$(database)/documents/portalAccounts/$(request.auth.uid)); }
     function account(){ return get(/databases/$(database)/documents/portalAccounts/$(request.auth.uid)).data; }
     function active(){ return accountExists() && account().portalStatus == 'ACTIVE'; }
-    function sysAdmin(){ return active() && 'SYSTEM_ADMINISTRATOR' in account().systemRoles; }
-    function hasPermission(permission){ return active() && (sysAdmin() || permission in account().permissions); }
-    function isOwner(uid){ return active() && request.auth.uid == uid; }
+    function sysAdmin(){ return active() && ('SYSTEM_OWNER' in account().systemRoles || 'SYSTEM_ADMINISTRATOR' in account().systemRoles); }
+    function hasPermission(permission){ return active() && (sysAdmin() || permission in account().permissions || '*' in account().permissions); }
+    function isOwner(uid){ return signedIn() && request.auth.uid == uid; }
 
-    match /portalAccounts/{uid} { allow read: if isOwner(uid) || sysAdmin(); allow create: if signedIn() && request.auth.uid == uid && request.resource.data.portalStatus == 'ACTIVE' && request.resource.data.systemRoles.size() == 0 && request.resource.data.activationCodeHash is string && get(/databases/$(database)/documents/activationCodes/$(request.resource.data.activationCodeHash)).data.status == 'PENDING' && get(/databases/$(database)/documents/activationCodes/$(request.resource.data.activationCodeHash)).data.staffProfileId == request.resource.data.staffProfileId; allow update: if sysAdmin(); allow delete: if false; }
-    match /portalUsernames/{username} { allow read: if signedIn(); allow create: if signedIn() && request.resource.data.uid == request.auth.uid && !exists(/databases/$(database)/documents/portalUsernames/$(username)); allow update, delete: if false; }
-    match /activationCodes/{codeHash} { allow get: if signedIn(); allow list, create, delete: if sysAdmin(); allow update: if signedIn() && resource.data.status == 'PENDING' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','usedByUid','usedAt']) && request.resource.data.status == 'USED' && request.resource.data.usedByUid == request.auth.uid; }
+    function bootstrapDoc(){ return get(/databases/$(database)/documents/system/bootstrap).data; }
+    function bootstrapAvailable(){
+      return signedIn()
+        && exists(/databases/$(database)/documents/system/bootstrap)
+        && bootstrapDoc().enabled == true
+        && bootstrapDoc().ownerCreated != true;
+    }
+    function validBootstrapAccount(uid){
+      return isOwner(uid)
+        && bootstrapAvailable()
+        && request.resource.data.portalStatus == 'ACTIVE'
+        && 'SYSTEM_OWNER' in request.resource.data.systemRoles
+        && 'SYSTEM_ADMINISTRATOR' in request.resource.data.systemRoles
+        && getAfter(/databases/$(database)/documents/system/bootstrap).data.enabled == false
+        && getAfter(/databases/$(database)/documents/system/bootstrap).data.ownerCreated == true
+        && getAfter(/databases/$(database)/documents/system/bootstrap).data.ownerUid == request.auth.uid;
+    }
+    function validActivatedAccount(uid){
+      return isOwner(uid)
+        && request.resource.data.portalStatus == 'ACTIVE'
+        && request.resource.data.systemRoles.size() == 0
+        && request.resource.data.activationCodeHash is string
+        && get(/databases/$(database)/documents/activationCodes/$(request.resource.data.activationCodeHash)).data.status == 'PENDING'
+        && get(/databases/$(database)/documents/activationCodes/$(request.resource.data.activationCodeHash)).data.staffProfileId == request.resource.data.staffProfileId;
+    }
+
+    match /portalAccounts/{uid} {
+      allow get: if isOwner(uid) || sysAdmin();
+      allow list: if sysAdmin();
+      allow create: if validBootstrapAccount(uid) || validActivatedAccount(uid);
+      allow update: if sysAdmin();
+      allow delete: if false;
+    }
+
+    match /portalUsernames/{username} {
+      allow get: if signedIn();
+      allow list: if sysAdmin();
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid && !exists(/databases/$(database)/documents/portalUsernames/$(username));
+      allow update, delete: if false;
+    }
+
+    match /system/bootstrap {
+      allow get: if true;
+      allow list: if false;
+      allow create: if false;
+      allow update: if (
+        bootstrapAvailable()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'enabled','ownerCreated','ownerUid','ownerUsername','completedAt'
+        ])
+        && request.resource.data.enabled == false
+        && request.resource.data.ownerCreated == true
+        && request.resource.data.ownerUid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/portalAccounts/$(request.auth.uid)).data.portalStatus == 'ACTIVE'
+        && 'SYSTEM_OWNER' in getAfter(/databases/$(database)/documents/portalAccounts/$(request.auth.uid)).data.systemRoles
+        && 'SYSTEM_ADMINISTRATOR' in getAfter(/databases/$(database)/documents/portalAccounts/$(request.auth.uid)).data.systemRoles
+      ) || sysAdmin();
+      allow delete: if false;
+    }
+
+    match /activationCodes/{codeHash} {
+      allow get: if signedIn();
+      allow list, create, delete: if sysAdmin();
+      allow update: if signedIn()
+        && resource.data.status == 'PENDING'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','usedByUid','usedAt'])
+        && request.resource.data.status == 'USED'
+        && request.resource.data.usedByUid == request.auth.uid;
+    }
+
     match /staffProfiles/{id} { allow read: if active(); allow create: if hasPermission('staff.manage'); allow update: if hasPermission('staff.manage') || hasPermission('personnel.approve') || hasPermission('quotas.review'); allow delete: if false; }
     match /ranks/{id} { allow read: if active(); allow create, update: if hasPermission('organization.manage'); allow delete: if sysAdmin(); }
     match /departments/{id} { allow read: if active(); allow create, update: if hasPermission('organization.manage'); allow delete: if sysAdmin(); }
@@ -25,7 +92,6 @@ service cloud.firestore {
     match /appeals/{id} { allow read: if active(); allow create: if active() && request.resource.data.status == 'SUBMITTED'; allow update: if hasPermission('appeals.review'); allow delete: if false; }
     match /alliances/{id} { allow read: if active(); allow create: if hasPermission('alliances.manage') && request.resource.data.createdBy == request.auth.uid; allow update: if hasPermission('alliances.manage'); allow delete: if sysAdmin(); }
     match /applications/{id} { allow read: if active(); allow create: if active() && request.resource.data.status == 'SUBMITTED'; allow update: if hasPermission('applications.review'); allow delete: if false; }
-
     match /courses/{id} { allow read: if active(); allow create, update: if hasPermission('training.manage'); allow delete: if sysAdmin(); }
     match /courseAssignments/{id} { allow read: if active(); allow create: if hasPermission('training.assign'); allow update: if hasPermission('training.grade') || hasPermission('training.manage'); allow delete: if false; }
     match /courseAttempts/{id} { allow read: if active(); allow create: if active() && request.resource.data.userUid == request.auth.uid; allow update: if hasPermission('training.grade'); allow delete: if false; }
@@ -45,7 +111,6 @@ service cloud.firestore {
     match /notifications/{id} { allow read: if active(); allow create: if active(); allow update: if active(); allow delete: if sysAdmin(); }
     match /dashboardLayouts/{uid} { allow read, write: if active() && (request.auth.uid == uid || sysAdmin()); }
     match /employeeTimeline/{id} { allow read: if active(); allow create: if active(); allow update, delete: if false; }
-
     match /auditLogs/{id} { allow read: if hasPermission('audit.read'); allow create: if signedIn() && request.resource.data.actorUid == request.auth.uid; allow update, delete: if false; }
     match /systemSettings/{id} { allow read: if active(); allow write: if sysAdmin(); }
     match /{document=**} { allow read, write: if false; }
