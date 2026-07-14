@@ -8,37 +8,40 @@ The Canela Portal is a React, TypeScript, Firebase Authentication, and Cloud Fir
 
 - Firebase web connection without Firebase Hosting
 - Username/password authentication without collecting user email addresses
-- One-time activation codes
-- Persistent cross-device sign-in
-- Protected routes and account-status checks
-- System Owner and System Administrator roles
-- Initial audit and security-rule foundation
+- One-time activation codes and persistent cross-device sign-in
+- Protected routes, account statuses, technical roles, and audit foundations
 
 ### Phase 2 — Staff and personnel operations
 
-- Role-aware dashboard
-- Searchable staff directory
+- Role-aware dashboard and searchable staff directory
 - Roblox and Discord identity records
-- Staff statuses and quota progress
-- Rank hierarchy, tiers, limits, and quota targets
-- Department directory
-- Promotion, demotion, transfer, status-change, resignation, and termination requests
-- Approval and denial workflow for personnel actions
-- Automatic staff-profile updates after approval
-- Quota activity submissions, evidence links, review, and point totals
-- Organization-wide announcements with priority and audience fields
-- Responsive desktop and mobile navigation
+- Ranks, tiers, limits, departments, teams, and quotas
+- Promotions, demotions, transfers, leave, resignations, and terminations
+- Announcements and personnel approval workflows
 
 ### Phase 3 — Compliance, alliances, and applications
 
-- Offence-definition data model
-- Disciplinary case creation, evidence links, recommendations, and final actions
-- Blacklist registry with Roblox and Discord identity fields
-- Appeal review and full, partial, or denied decisions
-- Alliance profiles, representatives, partnership statuses, and strike tracking
+- Offence definitions and disciplinary cases
+- Blacklists and appeals
+- Alliance profiles, representatives, statuses, and strikes
 - Application review, acceptance, denial, and waitlisting
-- Granular Phase 3 permissions and Firestore Security Rules
-- Protected compliance workspace linked from the signed-in portal
+
+### Phase 4 — Workforce development and HR
+
+- Course creation, training assignment, progress, passing scores, and monthly requirements
+- Certification issue, expiration, and renewal tracking
+- Performance reviews with seven scored categories and approval workflows
+- Measurable staff goals with progress and deadlines
+- Recognition badges, awards, and commendations
+- Leave-request submission and approval
+- Meeting, training, event, and roll-call attendance
+- Document library for policies, handbooks, guides, manuals, and SOPs
+- Internal digital forms for incidents, complaints, suggestions, transfers, resignations, and exit interviews
+- Direct, department, leadership, and organization-wide messaging
+- Notification center and read tracking
+- Employee timeline and configurable dashboard-layout collection foundations
+- Responsive Compliance and Workforce module launchers
+- Expanded Phase 4 Firestore Security Rules
 
 ## Local setup
 
@@ -58,7 +61,7 @@ Firebase Hosting is not configured or used. Build the static frontend with:
 npm run build
 ```
 
-Deploy the generated `dist` directory using the GitHub-based hosting workflow selected for the project. The Firebase project supplies Authentication and Firestore only.
+Deploy the generated `dist` directory using the GitHub-based hosting workflow selected for the project. Firebase supplies Authentication and Firestore only.
 
 ## Authentication model
 
@@ -81,7 +84,7 @@ Create the first Firebase Authentication account with the internal alias, then c
 }
 ```
 
-`SYSTEM_ADMINISTRATOR` satisfies every portal management permission check. Granular permissions include:
+`SYSTEM_ADMINISTRATOR` satisfies every portal-management permission check. Granular permissions include:
 
 ```text
 staff.manage
@@ -94,31 +97,47 @@ blacklists.manage
 appeals.review
 alliances.manage
 applications.review
+training.manage
+training.assign
+training.grade
+reviews.manage
+reviews.submit
+reviews.approve
+goals.manage
+recognitions.manage
+leave.approve
+attendance.manage
+documents.manage
+forms.manage
+messages.manage
 audit.read
 ```
 
-## Firestore collections
+## Phase 4 Firestore collections
 
 ```text
-staffProfiles
-ranks
-departments
-teams
-personnelActions
-quotaSubmissions
-announcements
-offenceDefinitions
-disciplinaryCases
-blacklists
-appeals
-alliances
-applications
-portalAccounts
-portalUsernames
-activationCodes
-auditLogs
-systemSettings
+courses
+courseAssignments
+courseAttempts
+courseCertificates
+trainingRequirements
+certifications
+performanceReviews
+reviewTemplates
+goalAssignments
+recognitions
+leaveRequests
+attendanceRecords
+documents
+documentVersions
+formResponses
+internalMessages
+notifications
+dashboardLayouts
+employeeTimeline
 ```
+
+Existing collections from Phases 1–3 remain in use.
 
 ## Security note
 
