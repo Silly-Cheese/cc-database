@@ -149,13 +149,14 @@ async function renderPortal() {
 }
 
 function bootstrapModal(message = '') {
+  document.getElementById('bootstrapModal')?.remove();
   root.insertAdjacentHTML('beforeend', `
     <div class="modal-backdrop" id="bootstrapModal">
       <section class="bootstrap-modal">
         <div class="brand-mark large">CC</div>
         <p>INITIAL SYSTEM SETUP</p>
         <h2>Create your System Owner account</h2>
-        <span>No linked Canela account was detected. Use the one-time bootstrap code configured in Firestore.</span>
+        <span>No linked Canela account was detected. Enter the one-time code stored in <strong>system/bootstrap</strong>.</span>
         ${message ? `<div class="alert">${esc(message)}</div>` : ''}
         <form id="bootstrapForm">
           <label>One-time bootstrap code<input name="code" autocomplete="one-time-code" required></label>
@@ -177,24 +178,40 @@ async function bootstrapOwner(event) {
   const form = new FormData(event.currentTarget);
   const password = String(form.get('password'));
   if (password !== String(form.get('confirm'))) {
-    document.getElementById('bootstrapModal').remove();
     bootstrapModal('Passwords do not match.');
     return;
   }
 
   try {
-    const codeHash = await hash(String(form.get('code')));
-    const bootstrapRef = doc(db, 'bootstrapCodes', codeHash);
+    const bootstrapCode = String(form.get('code')).trim().toUpperCase();
+    const bootstrapRef = doc(db, 'system', 'bootstrap');
     const bootstrapSnapshot = await getDoc(bootstrapRef);
-    if (!bootstrapSnapshot.exists() || bootstrapSnapshot.data().status !== 'OPEN') throw new Error('Invalid bootstrap code');
+    const bootstrap = bootstrapSnapshot.data();
+
+    if (
+      !bootstrapSnapshot.exists()
+      || bootstrap.enabled !== true
+      || bootstrap.ownerCreated === true
+      || String(bootstrap.code || '').trim().toUpperCase() !== bootstrapCode
+    ) {
+      throw new Error('Invalid or disabled bootstrap code');
+    }
 
     const anonymous = auth.currentUser?.isAnonymous ? { user: auth.currentUser } : await signInAnonymously(auth);
     const username = String(form.get('username')).trim().toLowerCase();
     const linked = await linkWithCredential(anonymous.user, EmailAuthProvider.credential(aliasFor(username), password));
 
     await runTransaction(db, async transaction => {
-      const freshBootstrap = await transaction.get(bootstrapRef);
-      if (!freshBootstrap.exists() || freshBootstrap.data().status !== 'OPEN') throw new Error('Bootstrap already used');
+      const freshSnapshot = await transaction.get(bootstrapRef);
+      const freshBootstrap = freshSnapshot.data();
+      if (
+        !freshSnapshot.exists()
+        || freshBootstrap.enabled !== true
+        || freshBootstrap.ownerCreated === true
+        || String(freshBootstrap.code || '').trim().toUpperCase() !== bootstrapCode
+      ) {
+        throw new Error('Bootstrap already used or disabled');
+      }
 
       transaction.set(doc(db, 'portalAccounts', linked.user.uid), {
         displayName: String(form.get('displayName')).trim(),
@@ -204,21 +221,30 @@ async function bootstrapOwner(event) {
         staffProfileId: '',
         systemRoles: ['SYSTEM_OWNER', 'SYSTEM_ADMINISTRATOR'],
         permissions: ['*'],
-        bootstrapCodeHash: codeHash,
+        bootstrapSource: 'system/bootstrap',
         createdAt: serverTimestamp(),
       });
-      transaction.set(doc(db, 'portalUsernames', username), { uid: linked.user.uid, createdAt: serverTimestamp() });
-      transaction.update(bootstrapRef, { status: 'USED', usedByUid: linked.user.uid, usedAt: serverTimestamp() });
+      transaction.set(doc(db, 'portalUsernames', username), {
+        uid: linked.user.uid,
+        createdAt: serverTimestamp(),
+      });
+      transaction.update(bootstrapRef, {
+        enabled: false,
+        ownerCreated: true,
+        ownerUid: linked.user.uid,
+        ownerUsername: username,
+        completedAt: serverTimestamp(),
+      });
     });
   } catch (error) {
     console.error(error);
     try { await signOut(auth); } catch {}
     authPage();
-    bootstrapModal('Bootstrap failed. Confirm the code is correct, unused, and configured in Firestore.');
+    bootstrapModal('Bootstrap failed. Confirm system/bootstrap exists, is enabled, and contains the exact code.');
   }
 }
 
-function authPage(message = '') {
+async function authPage(message = '') {
   root.innerHTML = `
     <main class="auth-page"><section class="auth-card">
       <div class="brand-mark large">CC</div><p>CANELA CORPORATION</p><h1>Administration Portal</h1><span>Authorized personnel only</span>
@@ -237,17 +263,30 @@ function authPage(message = '') {
         <label>Confirm password<input name="confirm" type="password" minlength="10" required></label>
         <button>Activate account</button>
       </form>
-      <button id="bootstrapButton" class="bootstrap-link">System owner setup</button>
+      <button id="bootstrapButton" class="bootstrap-link" hidden>System owner setup</button>
     </section></main>`;
 
   const loginForm = document.getElementById('loginForm');
   const activateForm = document.getElementById('activateForm');
+  const bootstrapButton = document.getElementById('bootstrapButton');
+
   document.getElementById('loginTab').onclick = () => { loginForm.hidden = false; activateForm.hidden = true; };
   document.getElementById('activateTab').onclick = () => { loginForm.hidden = true; activateForm.hidden = false; };
-  document.getElementById('bootstrapButton').onclick = async () => {
-    if (!auth.currentUser) await signInAnonymously(auth);
-    bootstrapModal();
-  };
+
+  try {
+    const snapshot = await getDoc(doc(db, 'system', 'bootstrap'));
+    const bootstrap = snapshot.data();
+    if (snapshot.exists() && bootstrap.enabled === true && bootstrap.ownerCreated !== true) {
+      bootstrapButton.hidden = false;
+      bootstrapButton.onclick = async () => {
+        if (!auth.currentUser) await signInAnonymously(auth);
+        bootstrapModal();
+      };
+    }
+  } catch (error) {
+    console.warn('Bootstrap availability could not be checked.', error);
+  }
+
   loginForm.onsubmit = login;
   activateForm.onsubmit = activate;
 }
@@ -310,7 +349,6 @@ onAuthStateChanged(auth, async user => {
     if (!snapshot.exists()) {
       if (user.isAnonymous) {
         authPage();
-        bootstrapModal();
       } else {
         await signOut(auth);
       }
