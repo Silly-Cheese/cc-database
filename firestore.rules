@@ -23,9 +23,7 @@ service cloud.firestore {
 
     match /portalUsernames/{username} {
       allow read: if signedIn();
-      allow create: if signedIn()
-        && request.resource.data.uid == request.auth.uid
-        && !exists(/databases/$(database)/documents/portalUsernames/$(username));
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid && !exists(/databases/$(database)/documents/portalUsernames/$(username));
       allow update, delete: if false;
     }
 
@@ -45,55 +43,63 @@ service cloud.firestore {
       allow update: if hasPermission('staff.manage') || hasPermission('personnel.approve') || hasPermission('quotas.review');
       allow delete: if false;
     }
-
-    match /ranks/{id} {
-      allow read: if active();
-      allow create, update: if hasPermission('organization.manage');
-      allow delete: if sysAdmin();
-    }
-
-    match /departments/{id} {
-      allow read: if active();
-      allow create, update: if hasPermission('organization.manage');
-      allow delete: if sysAdmin();
-    }
-
-    match /teams/{id} {
-      allow read: if active();
-      allow create, update: if hasPermission('organization.manage');
-      allow delete: if sysAdmin();
-    }
+    match /ranks/{id} { allow read: if active(); allow create, update: if hasPermission('organization.manage'); allow delete: if sysAdmin(); }
+    match /departments/{id} { allow read: if active(); allow create, update: if hasPermission('organization.manage'); allow delete: if sysAdmin(); }
+    match /teams/{id} { allow read: if active(); allow create, update: if hasPermission('organization.manage'); allow delete: if sysAdmin(); }
 
     match /personnelActions/{id} {
       allow read: if active();
-      allow create: if active()
-        && request.resource.data.requestedBy == request.auth.uid
-        && request.resource.data.status == 'PENDING';
-      allow update: if hasPermission('personnel.approve')
-        && resource.data.status == 'PENDING'
-        && request.resource.data.status in ['APPROVED','DENIED'];
+      allow create: if active() && request.resource.data.requestedBy == request.auth.uid && request.resource.data.status == 'PENDING';
+      allow update: if hasPermission('personnel.approve') && resource.data.status == 'PENDING' && request.resource.data.status in ['APPROVED','DENIED'];
       allow delete: if false;
     }
-
     match /quotaSubmissions/{id} {
       allow read: if active();
-      allow create: if active()
-        && request.resource.data.submittedBy == request.auth.uid
-        && request.resource.data.status == 'PENDING'
-        && request.resource.data.points is number
-        && request.resource.data.points > 0;
-      allow update: if hasPermission('quotas.review')
-        && resource.data.status == 'PENDING'
-        && request.resource.data.status in ['APPROVED','DENIED'];
+      allow create: if active() && request.resource.data.submittedBy == request.auth.uid && request.resource.data.status == 'PENDING' && request.resource.data.points is number && request.resource.data.points > 0;
+      allow update: if hasPermission('quotas.review') && resource.data.status == 'PENDING' && request.resource.data.status in ['APPROVED','DENIED'];
       allow delete: if false;
     }
-
     match /announcements/{id} {
       allow read: if active();
-      allow create: if hasPermission('announcements.manage')
-        && request.resource.data.createdBy == request.auth.uid;
+      allow create: if hasPermission('announcements.manage') && request.resource.data.createdBy == request.auth.uid;
       allow update: if hasPermission('announcements.manage');
       allow delete: if sysAdmin();
+    }
+
+    match /offenceDefinitions/{id} {
+      allow read: if active();
+      allow create, update: if hasPermission('discipline.manage');
+      allow delete: if sysAdmin();
+    }
+    match /disciplinaryCases/{id} {
+      allow read: if active();
+      allow create: if hasPermission('discipline.manage') && request.resource.data.issuedBy == request.auth.uid;
+      allow update: if hasPermission('discipline.manage') || hasPermission('appeals.review');
+      allow delete: if false;
+    }
+    match /blacklists/{id} {
+      allow read: if active();
+      allow create: if hasPermission('blacklists.manage') && request.resource.data.issuedBy == request.auth.uid;
+      allow update: if hasPermission('blacklists.manage') || hasPermission('appeals.review');
+      allow delete: if false;
+    }
+    match /appeals/{id} {
+      allow read: if active();
+      allow create: if active() && request.resource.data.status == 'SUBMITTED';
+      allow update: if hasPermission('appeals.review');
+      allow delete: if false;
+    }
+    match /alliances/{id} {
+      allow read: if active();
+      allow create: if hasPermission('alliances.manage') && request.resource.data.createdBy == request.auth.uid;
+      allow update: if hasPermission('alliances.manage');
+      allow delete: if sysAdmin();
+    }
+    match /applications/{id} {
+      allow read: if active();
+      allow create: if active() && request.resource.data.status == 'SUBMITTED';
+      allow update: if hasPermission('applications.review');
+      allow delete: if false;
     }
 
     match /auditLogs/{id} {
@@ -101,12 +107,7 @@ service cloud.firestore {
       allow create: if signedIn() && request.resource.data.actorUid == request.auth.uid;
       allow update, delete: if false;
     }
-
-    match /systemSettings/{id} {
-      allow read: if active();
-      allow write: if sysAdmin();
-    }
-
+    match /systemSettings/{id} { allow read: if active(); allow write: if sysAdmin(); }
     match /{document=**} { allow read, write: if false; }
   }
 }
