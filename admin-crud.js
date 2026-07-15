@@ -30,8 +30,7 @@ const MODULES = {
     ],
   },
   'Personnel Actions': {
-    collection: 'personnelActions',
-    permission: 'personnel.approve',
+    collection: 'personnelActions', permission: 'personnel.approve',
     fields: [
       ['staffName', 'Staff member', 'text', true],
       ['actionType', 'Action type', 'select', true, ['PROMOTION', 'DEMOTION', 'TRANSFER', 'LEAVE', 'SUSPENSION', 'RESIGNATION', 'TERMINATION']],
@@ -40,49 +39,35 @@ const MODULES = {
     ],
   },
   'Compliance & Discipline': {
-    collection: 'disciplinaryCases',
-    permission: 'discipline.manage',
+    collection: 'disciplinaryCases', permission: 'discipline.manage',
     fields: [
-      ['subjectName', 'Subject', 'text', true],
-      ['offenceName', 'Offence', 'text', true],
-      ['recommendedAction', 'Recommended action', 'text', true],
-      ['reason', 'Case details', 'textarea', true],
+      ['subjectName', 'Subject', 'text', true], ['offenceName', 'Offence', 'text', true],
+      ['recommendedAction', 'Recommended action', 'text', true], ['reason', 'Case details', 'textarea', true],
       ['status', 'Status', 'select', true, ['OPEN', 'UNDER_REVIEW', 'CLOSED', 'APPEALED']],
     ],
   },
   'Alliance Management': {
-    collection: 'alliances',
-    permission: 'alliances.manage',
+    collection: 'alliances', permission: 'alliances.manage',
     fields: [
-      ['name', 'Alliance name', 'text', true],
-      ['canelaRepresentative', 'Canela representative', 'text', true],
-      ['partnerRepresentative', 'Partner representative', 'text', false],
-      ['groupLink', 'Group link', 'url', false],
-      ['status', 'Status', 'select', true, ['ACTIVE', 'ON_HOLD', 'TERMINATED']],
-      ['notes', 'Notes', 'textarea', false],
+      ['name', 'Alliance name', 'text', true], ['canelaRepresentative', 'Canela representative', 'text', true],
+      ['partnerRepresentative', 'Partner representative', 'text', false], ['groupLink', 'Group link', 'url', false],
+      ['status', 'Status', 'select', true, ['ACTIVE', 'ON_HOLD', 'TERMINATED']], ['notes', 'Notes', 'textarea', false],
     ],
   },
   'Training & Workforce': {
-    collection: 'courses',
-    permission: 'training.manage',
+    collection: 'courses', permission: 'training.manage',
     fields: [
-      ['title', 'Course title', 'text', true],
-      ['category', 'Category', 'text', true],
-      ['passingScore', 'Passing score', 'number', true],
-      ['status', 'Status', 'select', true, ['DRAFT', 'ACTIVE', 'ARCHIVED']],
+      ['title', 'Course title', 'text', true], ['category', 'Category', 'text', true],
+      ['passingScore', 'Passing score', 'number', true], ['status', 'Status', 'select', true, ['DRAFT', 'ACTIVE', 'ARCHIVED']],
       ['description', 'Description', 'textarea', false],
     ],
   },
   'Policy Library': {
-    collection: 'documents',
-    permission: 'documents.manage',
+    collection: 'documents', permission: 'documents.manage',
     fields: [
-      ['title', 'Title', 'text', true],
-      ['type', 'Type', 'select', true, ['POLICY', 'HANDBOOK', 'GUIDE', 'MANUAL', 'SOP', 'FORM']],
-      ['version', 'Version', 'text', true],
-      ['visibility', 'Visibility', 'select', true, ['ALL_STAFF', 'LEADERSHIP', 'EXECUTIVE']],
-      ['url', 'Document link', 'url', false],
-      ['description', 'Description', 'textarea', false],
+      ['title', 'Title', 'text', true], ['type', 'Type', 'select', true, ['POLICY', 'HANDBOOK', 'GUIDE', 'MANUAL', 'SOP', 'FORM']],
+      ['version', 'Version', 'text', true], ['visibility', 'Visibility', 'select', true, ['ALL_STAFF', 'LEADERSHIP', 'EXECUTIVE']],
+      ['url', 'Document link', 'url', false], ['description', 'Description', 'textarea', false],
     ],
   },
 };
@@ -98,10 +83,8 @@ const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({
 function canManage(permission) {
   const roles = account?.systemRoles || [];
   const permissions = account?.permissions || [];
-  return roles.includes('SYSTEM_OWNER')
-    || roles.includes('SYSTEM_ADMINISTRATOR')
-    || permissions.includes('*')
-    || permissions.includes(permission);
+  return roles.includes('SYSTEM_OWNER') || roles.includes('SYSTEM_ADMINISTRATOR')
+    || permissions.includes('*') || permissions.includes(permission);
 }
 
 async function loadAccount() {
@@ -115,12 +98,8 @@ async function loadAccount() {
 function fieldMarkup(field, value = '') {
   const [name, label, type, required, options] = field;
   const requiredAttr = required ? 'required' : '';
-  if (type === 'textarea') {
-    return `<label>${label}<textarea name="${name}" ${requiredAttr}>${escapeHtml(value)}</textarea></label>`;
-  }
-  if (type === 'select') {
-    return `<label>${label}<select name="${name}" ${requiredAttr}><option value="">Select…</option>${options.map(option => `<option value="${option}" ${value === option ? 'selected' : ''}>${option.replaceAll('_', ' ')}</option>`).join('')}</select></label>`;
-  }
+  if (type === 'textarea') return `<label>${label}<textarea name="${name}" ${requiredAttr}>${escapeHtml(value)}</textarea></label>`;
+  if (type === 'select') return `<label>${label}<select name="${name}" ${requiredAttr}><option value="">Select…</option>${options.map(option => `<option value="${option}" ${value === option ? 'selected' : ''}>${option.replaceAll('_', ' ')}</option>`).join('')}</select></label>`;
   return `<label>${label}<input name="${name}" type="${type}" value="${escapeHtml(value)}" ${requiredAttr}></label>`;
 }
 
@@ -129,21 +108,12 @@ function showEditor(module, record = {}, id = null) {
   activeModule = module;
   editingId = id;
   document.body.insertAdjacentHTML('beforeend', `
-    <div class="crud-backdrop" id="crudModal">
-      <section class="crud-modal">
-        <div class="crud-heading">
-          <div><p>${id ? 'EDIT RECORD' : 'NEW RECORD'}</p><h2>${id ? 'Update' : 'Add to'} ${module.collection}</h2></div>
-          <button type="button" id="closeCrud" aria-label="Close">×</button>
-        </div>
-        <form id="crudForm" class="crud-form">
-          ${module.fields.map(field => fieldMarkup(field, record[field[0]] ?? '')).join('')}
-          <div class="crud-actions">
-            <button type="button" class="secondary" id="cancelCrud">Cancel</button>
-            <button type="submit">${id ? 'Save changes' : 'Create record'}</button>
-          </div>
-        </form>
-      </section>
-    </div>`);
+    <div class="crud-backdrop" id="crudModal"><section class="crud-modal">
+      <div class="crud-heading"><div><p>${id ? 'EDIT RECORD' : 'NEW RECORD'}</p><h2>${id ? 'Update' : 'Add to'} ${module.collection}</h2></div><button type="button" id="closeCrud" aria-label="Close">×</button></div>
+      <form id="crudForm" class="crud-form">${module.fields.map(field => fieldMarkup(field, record[field[0]] ?? '')).join('')}
+        <div class="crud-actions"><button type="button" class="secondary" id="cancelCrud">Cancel</button><button type="submit">${id ? 'Save changes' : 'Create record'}</button></div>
+      </form>
+    </section></div>`);
   document.getElementById('closeCrud').onclick = closeEditor;
   document.getElementById('cancelCrud').onclick = closeEditor;
   document.getElementById('crudForm').onsubmit = saveRecord;
@@ -169,18 +139,17 @@ async function saveRecord(event) {
     }
     data.updatedAt = serverTimestamp();
     data.updatedBy = auth.currentUser.uid;
-
-    if (editingId) {
-      await updateDoc(doc(db, activeModule.collection, editingId), data);
-    } else {
+    if (editingId) await updateDoc(doc(db, activeModule.collection, editingId), data);
+    else {
       data.createdAt = serverTimestamp();
       data.createdBy = auth.currentUser.uid;
       if (activeModule.collection === 'personnelActions') data.requestedBy = auth.currentUser.uid;
       if (activeModule.collection === 'disciplinaryCases') data.issuedBy = auth.currentUser.uid;
       await addDoc(collection(db, activeModule.collection), data);
     }
+    const collectionName = activeModule.collection;
     closeEditor();
-    window.dispatchEvent(new CustomEvent('canela-record-saved', { detail: { collection: activeModule?.collection } }));
+    window.dispatchEvent(new CustomEvent('canela-record-saved', { detail: { collection: collectionName } }));
     location.reload();
   } catch (error) {
     console.error(error);
@@ -206,6 +175,7 @@ window.CanelaCrud = {
   editStaff: id => editRecord(MODULES['Staff Directory'], id),
   createStaff: () => showEditor(MODULES['Staff Directory']),
 };
+window.dispatchEvent(new CustomEvent('canela-crud-ready'));
 
 function enhancePanel() {
   const panel = document.querySelector('main .panel');
@@ -214,7 +184,6 @@ function enhancePanel() {
   if (!panel || !module || !account || !canManage(module.permission)) return;
   if (panel.dataset.crudReady === 'true') return;
   panel.dataset.crudReady = 'true';
-
   const head = panel.querySelector('.section-head');
   const addButton = document.createElement('button');
   addButton.className = 'crud-add';
@@ -238,15 +207,10 @@ function enhancePanel() {
   });
 }
 
-const observer = new MutationObserver(() => enhancePanel());
+const observer = new MutationObserver(enhancePanel);
 observer.observe(document.getElementById('app'), { childList: true, subtree: true });
-
 onAuthStateChanged(auth, async user => {
   if (!user || user.isAnonymous) return;
-  try {
-    await loadAccount();
-    enhancePanel();
-  } catch (error) {
-    console.error('Could not load CRUD permissions.', error);
-  }
+  try { await loadAccount(); enhancePanel(); }
+  catch (error) { console.error('Could not load CRUD permissions.', error); }
 });
