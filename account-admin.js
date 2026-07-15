@@ -8,13 +8,73 @@ import {
   getDocs,
   setDoc,
   updateDoc,
-  deleteDoc,
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
 
 const auth = getAuth(getApp());
 const db = getFirestore(getApp());
 let account = null;
+
+const PERMISSION_GROUPS = [
+  {
+    title: 'Staff & Organization',
+    permissions: [
+      ['staff.manage', 'Manage staff profiles'],
+      ['organization.manage', 'Manage ranks, departments, and teams'],
+      ['personnel.approve', 'Approve personnel actions'],
+      ['promotions.create', 'Create promotions'],
+      ['promotions.approve', 'Approve promotions'],
+    ],
+  },
+  {
+    title: 'Quotas & Communications',
+    permissions: [
+      ['quotas.manage', 'Manage quota requirements'],
+      ['quotas.review', 'Review quota submissions'],
+      ['announcements.manage', 'Manage announcements'],
+      ['messages.manage', 'Manage internal messages'],
+      ['forms.manage', 'Manage forms and responses'],
+    ],
+  },
+  {
+    title: 'Compliance',
+    permissions: [
+      ['discipline.manage', 'Manage discipline and offences'],
+      ['blacklists.manage', 'Manage blacklists'],
+      ['appeals.review', 'Review appeals'],
+      ['audit.read', 'View audit logs'],
+    ],
+  },
+  {
+    title: 'Public Relations',
+    permissions: [
+      ['alliances.manage', 'Manage alliances'],
+      ['applications.manage', 'Manage application forms'],
+      ['applications.review', 'Review applications'],
+    ],
+  },
+  {
+    title: 'Training & HR',
+    permissions: [
+      ['training.manage', 'Manage courses and training'],
+      ['training.assign', 'Assign training'],
+      ['training.grade', 'Grade training attempts'],
+      ['reviews.submit', 'Submit performance reviews'],
+      ['reviews.approve', 'Approve performance reviews'],
+      ['reviews.manage', 'Manage review templates'],
+      ['goals.manage', 'Manage goals'],
+      ['recognitions.manage', 'Manage recognition records'],
+      ['leave.approve', 'Approve leave requests'],
+      ['attendance.manage', 'Manage attendance'],
+    ],
+  },
+  {
+    title: 'Documents',
+    permissions: [
+      ['documents.manage', 'Manage policies and documents'],
+    ],
+  },
+];
 
 const hash = async value => Array.from(
   new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value.trim().toUpperCase()))),
@@ -113,12 +173,24 @@ async function renderManager() {
   });
 }
 
+function permissionCheckboxes() {
+  return PERMISSION_GROUPS.map(group => `
+    <fieldset class="permission-group">
+      <legend>${group.title}</legend>
+      ${group.permissions.map(([value, label]) => `
+        <label class="permission-option">
+          <input type="checkbox" name="permissions" value="${value}">
+          <span><strong>${label}</strong><small>${value}</small></span>
+        </label>`).join('')}
+    </fieldset>`).join('');
+}
+
 function openCodeModal() {
   document.getElementById('accountCodeModal')?.remove();
   const generated = makeCode();
   document.body.insertAdjacentHTML('beforeend', `
     <div class="crud-backdrop" id="accountCodeModal">
-      <section class="crud-modal">
+      <section class="crud-modal account-code-modal">
         <div class="crud-heading">
           <div><p>NEW PORTAL ACCOUNT</p><h2>Create activation code</h2></div>
           <button type="button" id="closeAccountCode">×</button>
@@ -136,7 +208,16 @@ function openCodeModal() {
               <option value="SYSTEM_ADMINISTRATOR">System Administrator</option>
             </select>
           </label>
-          <label>Permissions<textarea name="permissions" placeholder="One per line, such as staff.manage"></textarea></label>
+          <div class="permission-selector">
+            <div class="permission-selector-heading">
+              <div><strong>Permissions</strong><span>Select everything this account should be allowed to do.</span></div>
+              <div class="permission-selector-actions">
+                <button type="button" id="selectAllPermissions">Select all</button>
+                <button type="button" id="clearPermissions">Clear</button>
+              </div>
+            </div>
+            <div class="permission-grid">${permissionCheckboxes()}</div>
+          </div>
           <div class="crud-actions">
             <button type="button" class="secondary" id="cancelAccountCode">Cancel</button>
             <button type="submit">Create activation code</button>
@@ -148,6 +229,12 @@ function openCodeModal() {
   document.getElementById('closeAccountCode').onclick = closeCodeModal;
   document.getElementById('cancelAccountCode').onclick = closeCodeModal;
   document.getElementById('accountCodeForm').onsubmit = createCode;
+  document.getElementById('selectAllPermissions').onclick = () => {
+    document.querySelectorAll('#accountCodeForm input[name="permissions"]').forEach(input => { input.checked = true; });
+  };
+  document.getElementById('clearPermissions').onclick = () => {
+    document.querySelectorAll('#accountCodeForm input[name="permissions"]').forEach(input => { input.checked = false; });
+  };
 }
 
 function closeCodeModal() {
@@ -168,10 +255,7 @@ async function createCode(event) {
     if ((await getDoc(codeRef)).exists()) throw new Error('That activation code already exists. Generate another code.');
 
     const role = String(form.get('systemRole') || '').trim();
-    const permissions = String(form.get('permissions') || '')
-      .split(/[\n,]/)
-      .map(value => value.trim())
-      .filter(Boolean);
+    const permissions = form.getAll('permissions').map(value => String(value));
 
     await setDoc(codeRef, {
       plainCode,
