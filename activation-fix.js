@@ -1,9 +1,8 @@
 import { getApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
 import {
   getAuth,
-  signInAnonymously,
-  linkWithCredential,
-  EmailAuthProvider,
+  createUserWithEmailAndPassword,
+  deleteUser,
   signOut,
 } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
 import {
@@ -29,6 +28,16 @@ function showMessage(message) {
   card.querySelector('.auth-tabs')?.insertAdjacentHTML('beforebegin', `<div class="alert activation-fix-message">${message}</div>`);
 }
 
+function friendlyError(error) {
+  const code = error?.code || '';
+  if (code === 'auth/email-already-in-use') return 'That portal username is already in use.';
+  if (code === 'auth/weak-password') return 'The password is too weak. Use at least 10 characters.';
+  if (code === 'auth/operation-not-allowed') return 'Username/password authentication is not enabled in Firebase Authentication.';
+  if (code === 'auth/network-request-failed') return 'The network request failed. Check your connection and try again.';
+  if (code === 'permission-denied' || code === 'firestore/permission-denied') return 'Firestore denied the activation request. Publish the latest Firestore rules.';
+  return error?.message || 'Activation failed. Confirm the code and username, then try again.';
+}
+
 async function redeemActivation(event) {
   const formElement = event.target.closest('#activateForm');
   if (!formElement) return;
@@ -36,30 +45,35 @@ async function redeemActivation(event) {
   event.preventDefault();
   event.stopImmediatePropagation();
 
-  const submit = formElement.querySelector('[type="submit"]');
+  const submit = formElement.querySelector('button[type="submit"], button:not([type])');
   const form = new FormData(formElement);
   const code = String(form.get('code') || '').trim().toUpperCase();
   const username = String(form.get('username') || '').trim().toLowerCase();
   const password = String(form.get('password') || '');
   const confirmPassword = String(form.get('confirm') || '');
 
-  if (!code || !username || !password) return showMessage('Complete every activation field.');
+  if (!code || !username || !password || !confirmPassword) return showMessage('Complete every activation field.');
   if (password !== confirmPassword) return showMessage('Passwords do not match.');
   if (username.length < 4) return showMessage('Your portal username must contain at least four characters.');
+  if (password.length < 10) return showMessage('Your password must contain at least 10 characters.');
 
-  submit.disabled = true;
-  submit.textContent = 'Activating…';
+  if (submit) {
+    submit.disabled = true;
+    submit.textContent = 'Activating…';
+  }
+
+  let createdUser = null;
 
   try {
+    // Create the Firebase Authentication account first. This removes the need
+    // for Anonymous Authentication to be enabled in the Firebase console.
+    if (auth.currentUser) await signOut(auth);
+    const credential = await createUserWithEmailAndPassword(auth, aliasFor(username), password);
+    createdUser = credential.user;
+
     const codeHash = await hash(code);
     const codeRef = doc(db, 'activationCodes', codeHash);
     const usernameRef = doc(db, 'portalUsernames', username);
-
-    // Firestore permits activation-code reads only to authenticated users.
-    // Establish the temporary anonymous session before reading the code.
-    const temporary = auth.currentUser?.isAnonymous
-      ? { user: auth.currentUser }
-      : await signInAnonymously(auth);
 
     const [codeSnapshot, usernameSnapshot] = await Promise.all([
       getDoc(codeRef),
@@ -70,19 +84,17 @@ async function redeemActivation(event) {
     if (codeSnapshot.data().status !== 'PENDING') throw new Error('That activation code is no longer available.');
     if (usernameSnapshot.exists()) throw new Error('That portal username is already in use.');
 
-    const credential = EmailAuthProvider.credential(aliasFor(username), password);
-    const linked = await linkWithCredential(temporary.user, credential);
-
     await runTransaction(db, async transaction => {
       const freshCode = await transaction.get(codeRef);
       const freshUsername = await transaction.get(usernameRef);
+
       if (!freshCode.exists() || freshCode.data().status !== 'PENDING') {
         throw new Error('That activation code has already been used or revoked.');
       }
       if (freshUsername.exists()) throw new Error('That portal username is already in use.');
 
       const invitation = freshCode.data();
-      transaction.set(doc(db, 'portalAccounts', linked.user.uid), {
+      transaction.set(doc(db, 'portalAccounts', createdUser.uid), {
         displayName: invitation.displayName || username,
         portalUsername: username,
         organizationalRank: invitation.organizationalRank || 'Staff Member',
@@ -94,13 +106,15 @@ async function redeemActivation(event) {
         activatedAt: serverTimestamp(),
         createdAt: serverTimestamp(),
       });
+
       transaction.set(usernameRef, {
-        uid: linked.user.uid,
+        uid: createdUser.uid,
         createdAt: serverTimestamp(),
       });
+
       transaction.update(codeRef, {
         status: 'USED',
-        usedByUid: linked.user.uid,
+        usedByUid: createdUser.uid,
         usedUsername: username,
         usedAt: serverTimestamp(),
       });
@@ -109,10 +123,19 @@ async function redeemActivation(event) {
     location.reload();
   } catch (error) {
     console.error('Activation failed:', error);
+
+    // Do not leave an unusable Firebase Authentication account behind when
+    // the code is invalid or Firestore rejects the transaction.
+    if (createdUser) {
+      try { await deleteUser(createdUser); } catch (cleanupError) { console.warn('Could not remove incomplete account:', cleanupError); }
+    }
     try { await signOut(auth); } catch {}
-    showMessage(error.message || 'Activation failed. Confirm the code and username, then try again.');
-    submit.disabled = false;
-    submit.textContent = 'Activate account';
+
+    showMessage(friendlyError(error));
+    if (submit) {
+      submit.disabled = false;
+      submit.textContent = 'Activate account';
+    }
   }
 }
 
