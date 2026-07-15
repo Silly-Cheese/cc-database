@@ -26,13 +26,18 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/system/bootstrap).data.ownerCreated == true
         && getAfter(/databases/$(database)/documents/system/bootstrap).data.ownerUid == request.auth.uid;
     }
+    function activationCode(codeHash){
+      return get(/databases/$(database)/documents/activationCodes/$(codeHash)).data;
+    }
     function validActivatedAccount(uid){
       return isOwner(uid)
         && request.resource.data.portalStatus == 'ACTIVE'
-        && request.resource.data.systemRoles.size() == 0
         && request.resource.data.activationCodeHash is string
-        && get(/databases/$(database)/documents/activationCodes/$(request.resource.data.activationCodeHash)).data.status == 'PENDING'
-        && get(/databases/$(database)/documents/activationCodes/$(request.resource.data.activationCodeHash)).data.staffProfileId == request.resource.data.staffProfileId;
+        && exists(/databases/$(database)/documents/activationCodes/$(request.resource.data.activationCodeHash))
+        && activationCode(request.resource.data.activationCodeHash).status == 'PENDING'
+        && activationCode(request.resource.data.activationCodeHash).staffProfileId == request.resource.data.staffProfileId
+        && activationCode(request.resource.data.activationCodeHash).systemRoles == request.resource.data.systemRoles
+        && activationCode(request.resource.data.activationCodeHash).permissions == request.resource.data.permissions;
     }
 
     match /portalAccounts/{uid} {
@@ -72,11 +77,13 @@ service cloud.firestore {
     match /activationCodes/{codeHash} {
       allow get: if signedIn();
       allow list, create, delete: if sysAdmin();
-      allow update: if signedIn()
+      allow update: if sysAdmin() || (
+        signedIn()
         && resource.data.status == 'PENDING'
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','usedByUid','usedAt'])
         && request.resource.data.status == 'USED'
-        && request.resource.data.usedByUid == request.auth.uid;
+        && request.resource.data.usedByUid == request.auth.uid
+      );
     }
 
     match /staffProfiles/{id} { allow read: if active(); allow create: if hasPermission('staff.manage'); allow update: if hasPermission('staff.manage') || hasPermission('personnel.approve') || hasPermission('quotas.review'); allow delete: if false; }
