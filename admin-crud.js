@@ -1,11 +1,12 @@
 import { getApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
-import { getAuth } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
 import {
   getFirestore,
   collection,
   addDoc,
   doc,
   getDoc,
+  getDocs,
   updateDoc,
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
@@ -179,6 +180,7 @@ async function saveRecord(event) {
       await addDoc(collection(db, activeModule.collection), data);
     }
     closeEditor();
+    window.dispatchEvent(new CustomEvent('canela-record-saved', { detail: { collection: activeModule?.collection } }));
     location.reload();
   } catch (error) {
     console.error(error);
@@ -194,9 +196,16 @@ async function editRecord(module, id) {
     if (!snap.exists()) throw new Error('Record not found');
     showEditor(module, snap.data(), id);
   } catch (error) {
-    alert(`Unable to open record: ${error.message}`);
+    console.error(error);
+    alert(`Unable to open record: ${error.code || error.message}`);
   }
 }
+
+window.CanelaCrud = {
+  canManage,
+  editStaff: id => editRecord(MODULES['Staff Directory'], id),
+  createStaff: () => showEditor(MODULES['Staff Directory']),
+};
 
 function enhancePanel() {
   const panel = document.querySelector('main .panel');
@@ -218,15 +227,13 @@ function enhancePanel() {
   const headingRow = table.querySelector('thead tr');
   headingRow?.insertAdjacentHTML('beforeend', '<th>Actions</th>');
   table.querySelectorAll('tbody tr').forEach((row, index) => {
-    const visibleRows = [...table.querySelectorAll('tbody tr')];
-    const recordId = null;
     const cell = document.createElement('td');
     cell.innerHTML = '<button class="crud-edit" type="button">Edit</button>';
     row.appendChild(cell);
     cell.querySelector('button').onclick = async () => {
       const snapshots = await getDocs(collection(db, module.collection));
       const target = snapshots.docs[index];
-      if (target) editRecord(module, target.id);
+      if (target) await editRecord(module, target.id);
     };
   });
 }
@@ -234,7 +241,7 @@ function enhancePanel() {
 const observer = new MutationObserver(() => enhancePanel());
 observer.observe(document.getElementById('app'), { childList: true, subtree: true });
 
-auth.onAuthStateChanged(async user => {
+onAuthStateChanged(auth, async user => {
   if (!user || user.isAnonymous) return;
   try {
     await loadAccount();
