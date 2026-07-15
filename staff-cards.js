@@ -33,22 +33,40 @@ function value(record, ...keys) {
   return '';
 }
 
-async function openEditor(recordId) {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    if (window.CanelaCrud?.editStaff) {
-      await window.CanelaCrud.editStaff(recordId);
-      return;
-    }
+async function waitForCrud() {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    if (window.CanelaCrud?.editStaff && window.CanelaCrud?.createStaff) return window.CanelaCrud;
     await new Promise(resolve => setTimeout(resolve, 100));
   }
-  alert('The profile editor could not load. Refresh the page and try again.');
+  return null;
 }
 
-async function renderStaffCards() {
+async function openEditor(recordId) {
+  const crud = await waitForCrud();
+  if (!crud) {
+    alert('The profile editor could not load. Refresh the page and try again.');
+    return;
+  }
+  await crud.editStaff(recordId);
+}
+
+async function openCreator() {
+  const crud = await waitForCrud();
+  if (!crud) {
+    alert('The staff editor could not load. Refresh the page and try again.');
+    return;
+  }
+  crud.createStaff();
+}
+
+async function renderStaffCards(force = false) {
   if (rendering || !auth.currentUser || auth.currentUser.isAnonymous) return;
   const panel = document.querySelector('main .panel');
   const title = panel?.querySelector('.section-head h1, h1')?.textContent?.trim();
   if (!panel || title !== 'Staff Directory') return;
+
+  // Do not continuously replace the cards in response to our own DOM changes.
+  if (!force && panel.dataset.staffCardsReady === 'true' && panel.querySelector('.staff-card-grid')) return;
 
   rendering = true;
   try {
@@ -56,25 +74,24 @@ async function renderStaffCards() {
     const records = snapshot.docs.map(document => ({ id: document.id, ...document.data() }));
 
     panel.querySelector('.staff-card-grid')?.remove();
+    panel.querySelector('.staff-empty-card')?.remove();
     panel.querySelector('.table-wrap')?.remove();
     panel.querySelector('.empty')?.remove();
 
-    const existingAdd = panel.querySelector('.crud-add');
-    if (existingAdd) {
-      existingAdd.onclick = async () => {
-        for (let attempt = 0; attempt < 20; attempt += 1) {
-          if (window.CanelaCrud?.createStaff) {
-            window.CanelaCrud.createStaff();
-            return;
-          }
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-        alert('The staff editor could not load. Refresh the page and try again.');
-      };
+    let addButton = panel.querySelector('.crud-add');
+    if (!addButton) {
+      addButton = document.createElement('button');
+      addButton.className = 'crud-add';
+      addButton.textContent = '+ Add staff profile';
+      panel.querySelector('.section-head')?.appendChild(addButton);
+    }
+    if (addButton) {
+      addButton.textContent = '+ Add staff profile';
+      addButton.onclick = openCreator;
     }
 
     if (!records.length) {
-      panel.insertAdjacentHTML('beforeend', '<div class="staff-empty-card"><div class="staff-avatar">CC</div><h2>No staff profiles yet</h2><p>Use “Add record” to create the first staff profile.</p></div>');
+      panel.insertAdjacentHTML('beforeend', '<div class="staff-empty-card"><div class="staff-avatar">CC</div><h2>No staff profiles yet</h2><p>Use “Add staff profile” to create the first staff record.</p></div>');
       panel.dataset.staffCardsReady = 'true';
       return;
     }
@@ -94,6 +111,7 @@ async function renderStaffCards() {
 
       const card = document.createElement('article');
       card.className = 'staff-profile-card';
+      card.dataset.recordId = record.id;
       card.innerHTML = `
         <div class="staff-card-accent"></div>
         <div class="staff-card-top">
@@ -111,17 +129,18 @@ async function renderStaffCards() {
           <div><span>Discord ID</span><strong title="${esc(discordId)}">${esc(discordId)}</strong></div>
           <div><span>Department</span><strong title="${esc(department)}">${esc(department)}</strong></div>
           <div><span>Team</span><strong title="${esc(team)}">${esc(team)}</strong></div>
-          <div><span>Record ID</span><strong title="${esc(record.id)}">${esc(record.id)}</strong></div>
+          <div><span>Staff status</span><strong>${esc(status.replaceAll('_', ' '))}</strong></div>
         </div>
         <div class="staff-card-footer">
           <span>Profile ${String(index + 1).padStart(2, '0')}</span>
           <button class="staff-card-edit" type="button">Edit profile</button>
         </div>`;
 
-      card.querySelector('.staff-card-edit').onclick = event => {
+      card.querySelector('.staff-card-edit').addEventListener('click', async event => {
         event.preventDefault();
-        openEditor(record.id);
-      };
+        event.stopPropagation();
+        await openEditor(record.id);
+      });
       cards.appendChild(card);
     });
 
@@ -137,12 +156,14 @@ async function renderStaffCards() {
 let timer = null;
 function scheduleRender() {
   clearTimeout(timer);
-  timer = setTimeout(renderStaffCards, 150);
+  timer = setTimeout(() => renderStaffCards(false), 120);
 }
 
 const observer = new MutationObserver(scheduleRender);
 observer.observe(document.getElementById('app'), { childList: true, subtree: true });
-window.addEventListener('canela-record-saved', scheduleRender);
+window.addEventListener('canela-record-saved', event => {
+  if (event.detail?.collection === 'staffProfiles') renderStaffCards(true);
+});
 window.addEventListener('canela-crud-ready', scheduleRender);
 onAuthStateChanged(auth, scheduleRender);
 scheduleRender();
