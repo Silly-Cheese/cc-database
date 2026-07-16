@@ -75,6 +75,7 @@ const MODULES = {
 let account = null;
 let activeModule = null;
 let editingId = null;
+const collectionIdCache = new Map();
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
@@ -148,6 +149,7 @@ async function saveRecord(event) {
       await addDoc(collection(db, activeModule.collection), data);
     }
     const collectionName = activeModule.collection;
+    collectionIdCache.delete(collectionName);
     closeEditor();
     window.dispatchEvent(new CustomEvent('canela-record-saved', { detail: { collection: collectionName } }));
     location.reload();
@@ -170,20 +172,32 @@ async function editRecord(module, id) {
   }
 }
 
+async function getCollectionIds(collectionName) {
+  const cached = collectionIdCache.get(collectionName);
+  if (cached && Date.now() - cached.loadedAt < 30000) return cached.ids;
+  const snapshot = await getDocs(collection(db, collectionName));
+  const ids = snapshot.docs.map(item => item.id);
+  collectionIdCache.set(collectionName, { ids, loadedAt: Date.now() });
+  return ids;
+}
+
 window.CanelaCrud = {
   canManage,
   editStaff: id => editRecord(MODULES['Staff Directory'], id),
   createStaff: () => showEditor(MODULES['Staff Directory']),
+  editAlliance: id => editRecord(MODULES['Alliance Management'], id),
+  createAlliance: () => showEditor(MODULES['Alliance Management']),
 };
 window.dispatchEvent(new CustomEvent('canela-crud-ready'));
 
-function enhancePanel() {
+async function enhancePanel() {
   const panel = document.querySelector('main .panel');
   const title = panel?.querySelector('.section-head h1, h1')?.textContent?.trim();
   const module = MODULES[title];
   if (!panel || !module || !account || !canManage(module.permission)) return;
   if (panel.dataset.crudReady === 'true') return;
   panel.dataset.crudReady = 'true';
+
   const head = panel.querySelector('.section-head');
   const addButton = document.createElement('button');
   addButton.className = 'crud-add';
@@ -195,22 +209,30 @@ function enhancePanel() {
   if (!table) return;
   const headingRow = table.querySelector('thead tr');
   headingRow?.insertAdjacentHTML('beforeend', '<th>Actions</th>');
-  table.querySelectorAll('tbody tr').forEach((row, index) => {
+
+  const rows = [...table.querySelectorAll('tbody tr')];
+  const ids = await getCollectionIds(module.collection);
+  rows.forEach((row, index) => {
+    if (row.querySelector('.crud-edit')) return;
     const cell = document.createElement('td');
     cell.innerHTML = '<button class="crud-edit" type="button">Edit</button>';
     row.appendChild(cell);
-    cell.querySelector('button').onclick = async () => {
-      const snapshots = await getDocs(collection(db, module.collection));
-      const target = snapshots.docs[index];
-      if (target) await editRecord(module, target.id);
-    };
+    const targetId = ids[index];
+    cell.querySelector('button').onclick = () => targetId && editRecord(module, targetId);
   });
 }
 
-const observer = new MutationObserver(enhancePanel);
-observer.observe(document.getElementById('app'), { childList: true, subtree: true });
+let enhanceTimer = null;
+function scheduleEnhance() {
+  clearTimeout(enhanceTimer);
+  enhanceTimer = setTimeout(enhancePanel, 80);
+}
+
+const observer = new MutationObserver(scheduleEnhance);
+observer.observe(document.getElementById('app'), { childList: true, subtree: false });
 onAuthStateChanged(auth, async user => {
   if (!user || user.isAnonymous) return;
-  try { await loadAccount(); enhancePanel(); }
+  try { await loadAccount(); scheduleEnhance(); }
   catch (error) { console.error('Could not load CRUD permissions.', error); }
 });
+window.addEventListener('canela-view-rendered', scheduleEnhance);
