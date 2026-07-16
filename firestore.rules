@@ -80,7 +80,7 @@ service cloud.firestore {
       allow update: if sysAdmin() || (
         signedIn()
         && resource.data.status == 'PENDING'
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','usedByUid','usedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','usedByUid','usedAt','usedUsername'])
         && request.resource.data.status == 'USED'
         && request.resource.data.usedByUid == request.auth.uid
       );
@@ -100,6 +100,7 @@ service cloud.firestore {
     match /alliances/{id} { allow read: if active(); allow create: if hasPermission('alliances.manage') && request.resource.data.createdBy == request.auth.uid; allow update: if hasPermission('alliances.manage'); allow delete: if sysAdmin(); }
     match /applications/{id} { allow read: if active(); allow create: if active() && request.resource.data.status == 'SUBMITTED'; allow update: if hasPermission('applications.review'); allow delete: if false; }
     match /courses/{id} { allow read: if active(); allow create, update: if hasPermission('training.manage'); allow delete: if sysAdmin(); }
+    match /internshipCompletions/{id} { allow read: if active(); allow create, update: if hasPermission('training.manage'); allow delete: if sysAdmin() || hasPermission('training.manage'); }
     match /courseAssignments/{id} { allow read: if active(); allow create: if hasPermission('training.assign'); allow update: if hasPermission('training.grade') || hasPermission('training.manage'); allow delete: if false; }
     match /courseAttempts/{id} { allow read: if active(); allow create: if active() && request.resource.data.userUid == request.auth.uid; allow update: if hasPermission('training.grade'); allow delete: if false; }
     match /courseCertificates/{id} { allow read: if active(); allow create, update: if hasPermission('training.grade'); allow delete: if false; }
