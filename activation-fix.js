@@ -63,13 +63,15 @@ async function redeemActivation(event) {
   }
 
   let createdUser = null;
+  window.__CANELA_ACTIVATION_IN_PROGRESS__ = true;
 
   try {
-    // Create the Firebase Authentication account first. This removes the need
-    // for Anonymous Authentication to be enabled in the Firebase console.
     if (auth.currentUser) await signOut(auth);
     const credential = await createUserWithEmailAndPassword(auth, aliasFor(username), password);
     createdUser = credential.user;
+
+    // Ensure the fresh ID token is available before Firestore reads begin.
+    await createdUser.getIdToken(true);
 
     const codeHash = await hash(code);
     const codeRef = doc(db, 'activationCodes', codeHash);
@@ -120,17 +122,17 @@ async function redeemActivation(event) {
       });
     });
 
+    window.__CANELA_ACTIVATION_IN_PROGRESS__ = false;
     location.reload();
   } catch (error) {
     console.error('Activation failed:', error);
 
-    // Do not leave an unusable Firebase Authentication account behind when
-    // the code is invalid or Firestore rejects the transaction.
     if (createdUser) {
       try { await deleteUser(createdUser); } catch (cleanupError) { console.warn('Could not remove incomplete account:', cleanupError); }
     }
     try { await signOut(auth); } catch {}
 
+    window.__CANELA_ACTIVATION_IN_PROGRESS__ = false;
     showMessage(friendlyError(error));
     if (submit) {
       submit.disabled = false;
