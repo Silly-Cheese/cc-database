@@ -1,9 +1,9 @@
-import { getApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
+import { initializeApp, deleteApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
 import {
   getAuth,
   createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
   deleteUser,
-  signOut,
 } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
 import {
   getFirestore,
@@ -13,9 +13,14 @@ import {
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
 
-const auth = getAuth(getApp());
-const db = getFirestore(getApp());
+const firebaseConfig = {
+  apiKey: 'AIzaSyDXxh48yiFHMqL4dH82-fTg0dZXqFi1ud4',
+  authDomain: 'cc-database-19dba.firebaseapp.com',
+  projectId: 'cc-database-19dba',
+  appId: '1:793192077235:web:ff335960e78a39ac971dc6',
+};
 
+const mainAuth = getAuth();
 const aliasFor = username => `${username.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '')}@accounts.canela.internal`;
 const hash = async value => Array.from(
   new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value.trim().toUpperCase()))),
@@ -62,20 +67,25 @@ async function redeemActivation(event) {
     submit.textContent = 'Activating…';
   }
 
+  const secondaryApp = initializeApp(firebaseConfig, `activation-${Date.now()}-${Math.random()}`);
+  const secondaryAuth = getAuth(secondaryApp);
+  const secondaryDb = getFirestore(secondaryApp);
   let createdUser = null;
-  window.__CANELA_ACTIVATION_IN_PROGRESS__ = true;
 
   try {
-    if (auth.currentUser) await signOut(auth);
-    const credential = await createUserWithEmailAndPassword(auth, aliasFor(username), password);
+    // Use an isolated Firebase app so the portal's main auth observer cannot
+    // sign the new account out before its Firestore profile is created.
+    const credential = await createUserWithEmailAndPassword(
+      secondaryAuth,
+      aliasFor(username),
+      password,
+    );
     createdUser = credential.user;
-
-    // Ensure the fresh ID token is available before Firestore reads begin.
     await createdUser.getIdToken(true);
 
     const codeHash = await hash(code);
-    const codeRef = doc(db, 'activationCodes', codeHash);
-    const usernameRef = doc(db, 'portalUsernames', username);
+    const codeRef = doc(secondaryDb, 'activationCodes', codeHash);
+    const usernameRef = doc(secondaryDb, 'portalUsernames', username);
 
     const [codeSnapshot, usernameSnapshot] = await Promise.all([
       getDoc(codeRef),
@@ -86,7 +96,7 @@ async function redeemActivation(event) {
     if (codeSnapshot.data().status !== 'PENDING') throw new Error('That activation code is no longer available.');
     if (usernameSnapshot.exists()) throw new Error('That portal username is already in use.');
 
-    await runTransaction(db, async transaction => {
+    await runTransaction(secondaryDb, async transaction => {
       const freshCode = await transaction.get(codeRef);
       const freshUsername = await transaction.get(usernameRef);
 
@@ -96,7 +106,7 @@ async function redeemActivation(event) {
       if (freshUsername.exists()) throw new Error('That portal username is already in use.');
 
       const invitation = freshCode.data();
-      transaction.set(doc(db, 'portalAccounts', createdUser.uid), {
+      transaction.set(doc(secondaryDb, 'portalAccounts', createdUser.uid), {
         displayName: invitation.displayName || username,
         portalUsername: username,
         organizationalRank: invitation.organizationalRank || 'Staff Member',
@@ -122,7 +132,8 @@ async function redeemActivation(event) {
       });
     });
 
-    window.__CANELA_ACTIVATION_IN_PROGRESS__ = false;
+    await deleteApp(secondaryApp);
+    await signInWithEmailAndPassword(mainAuth, aliasFor(username), password);
     location.reload();
   } catch (error) {
     console.error('Activation failed:', error);
@@ -130,9 +141,8 @@ async function redeemActivation(event) {
     if (createdUser) {
       try { await deleteUser(createdUser); } catch (cleanupError) { console.warn('Could not remove incomplete account:', cleanupError); }
     }
-    try { await signOut(auth); } catch {}
+    try { await deleteApp(secondaryApp); } catch {}
 
-    window.__CANELA_ACTIVATION_IN_PROGRESS__ = false;
     showMessage(friendlyError(error));
     if (submit) {
       submit.disabled = false;
