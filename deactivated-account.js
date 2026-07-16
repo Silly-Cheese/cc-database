@@ -1,13 +1,24 @@
 import { getApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
-import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
-import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
+import {
+  getAuth,
+  beforeAuthStateChanged,
+  onAuthStateChanged,
+  signOut,
+} from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
+import {
+  getFirestore,
+  doc,
+  getDoc,
+} from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
 
 const auth = getAuth(getApp());
 const db = getFirestore(getApp());
-let handlingDisabledAccount = false;
+const NOTICE_KEY = 'canela-deactivated-account-notice';
+let checking = false;
 
 function showDeactivatedModal() {
   document.getElementById('deactivatedAccountModal')?.remove();
+  document.documentElement.classList.add('deactivated-account-open');
   document.body.insertAdjacentHTML('beforeend', `
     <div class="deactivated-account-backdrop" id="deactivatedAccountModal" role="dialog" aria-modal="true" aria-labelledby="deactivatedAccountTitle">
       <section class="deactivated-account-modal">
@@ -19,29 +30,64 @@ function showDeactivatedModal() {
       </section>
     </div>`);
 
-  document.getElementById('closeDeactivatedModal').onclick = () => {
+  const close = document.getElementById('closeDeactivatedModal');
+  close?.focus();
+  close.onclick = () => {
+    sessionStorage.removeItem(NOTICE_KEY);
+    document.documentElement.classList.remove('deactivated-account-open');
     document.getElementById('deactivatedAccountModal')?.remove();
   };
 }
 
-onAuthStateChanged(auth, async user => {
-  if (!user || user.isAnonymous || handlingDisabledAccount) return;
+function rememberAndShow() {
+  sessionStorage.setItem(NOTICE_KEY, '1');
+  queueMicrotask(showDeactivatedModal);
+}
 
+// This runs before the portal's regular auth-state observer. It prevents a
+// disabled account from ever being rendered as an authenticated portal user.
+beforeAuthStateChanged(auth, async user => {
+  if (!user || user.isAnonymous || checking) return;
+
+  checking = true;
   try {
     const snapshot = await getDoc(doc(db, 'portalAccounts', user.uid));
     if (!snapshot.exists()) return;
 
-    const status = String(snapshot.data().portalStatus || '').toUpperCase();
+    const status = String(snapshot.data().portalStatus || '').trim().toUpperCase();
     if (status === 'ACTIVE') return;
 
-    handlingDisabledAccount = true;
-    showDeactivatedModal();
-    try {
-      await signOut(auth);
-    } finally {
-      handlingDisabledAccount = false;
-    }
-  } catch (error) {
-    console.error('Unable to verify account activation status.', error);
+    rememberAndShow();
+    throw new Error('CANELA_ACCOUNT_DEACTIVATED');
+  } finally {
+    checking = false;
   }
 });
+
+// Fallback for remembered sessions and any browser that restores Firebase
+// authentication before the sign-in form is submitted.
+onAuthStateChanged(auth, async user => {
+  if (!user) {
+    if (sessionStorage.getItem(NOTICE_KEY) === '1') showDeactivatedModal();
+    return;
+  }
+  if (user.isAnonymous) return;
+
+  try {
+    const snapshot = await getDoc(doc(db, 'portalAccounts', user.uid));
+    if (!snapshot.exists()) return;
+    const status = String(snapshot.data().portalStatus || '').trim().toUpperCase();
+    if (status === 'ACTIVE') return;
+
+    rememberAndShow();
+    await signOut(auth);
+  } catch (error) {
+    if (error?.message !== 'CANELA_ACCOUNT_DEACTIVATED') {
+      console.error('Unable to verify account activation status.', error);
+    }
+  }
+});
+
+if (sessionStorage.getItem(NOTICE_KEY) === '1') {
+  window.addEventListener('DOMContentLoaded', showDeactivatedModal, { once: true });
+}
