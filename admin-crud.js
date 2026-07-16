@@ -8,6 +8,7 @@ import {
   getDoc,
   getDocs,
   updateDoc,
+  deleteDoc,
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
 
@@ -172,6 +173,20 @@ async function editRecord(module, id) {
   }
 }
 
+async function deleteRecord(module, id, label = 'this record') {
+  if (!id || !canManage(module.permission)) return;
+  if (!confirm(`Permanently delete ${label}? This cannot be undone.`)) return;
+  try {
+    await deleteDoc(doc(db, module.collection, id));
+    collectionIdCache.delete(module.collection);
+    window.dispatchEvent(new CustomEvent('canela-record-deleted', { detail: { collection: module.collection, id } }));
+    location.reload();
+  } catch (error) {
+    console.error(error);
+    alert(`Unable to delete: ${error.code || error.message}`);
+  }
+}
+
 async function getCollectionIds(collectionName) {
   const cached = collectionIdCache.get(collectionName);
   if (cached && Date.now() - cached.loadedAt < 30000) return cached.ids;
@@ -187,6 +202,9 @@ window.CanelaCrud = {
   createStaff: () => showEditor(MODULES['Staff Directory']),
   editAlliance: id => editRecord(MODULES['Alliance Management'], id),
   createAlliance: () => showEditor(MODULES['Alliance Management']),
+  editPersonnel: id => editRecord(MODULES['Personnel Actions'], id),
+  createPersonnel: () => showEditor(MODULES['Personnel Actions']),
+  deletePersonnel: (id, label) => deleteRecord(MODULES['Personnel Actions'], id, label),
 };
 window.dispatchEvent(new CustomEvent('canela-crud-ready'));
 
@@ -213,13 +231,16 @@ async function enhancePanel() {
   const rows = [...table.querySelectorAll('tbody tr')];
   const ids = await getCollectionIds(module.collection);
   rows.forEach((row, index) => {
+    const targetId = ids[index];
+    if (targetId) row.dataset.recordId = targetId;
     if (row.querySelector('.crud-edit')) return;
     const cell = document.createElement('td');
     cell.innerHTML = '<button class="crud-edit" type="button">Edit</button>';
     row.appendChild(cell);
-    const targetId = ids[index];
     cell.querySelector('button').onclick = () => targetId && editRecord(module, targetId);
   });
+
+  window.dispatchEvent(new CustomEvent('canela-crud-enhanced', { detail: { title, collection: module.collection } }));
 }
 
 let enhanceTimer = null;
