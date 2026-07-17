@@ -48,6 +48,14 @@ async function setAccountStatus(uid, nextStatus, displayName) {
   }
 }
 
+function openEditor(uid) {
+  if (!window.CanelaAccountEditor?.open) {
+    alert('The account editor is still loading. Refresh and try again.');
+    return;
+  }
+  window.CanelaAccountEditor.open(uid);
+}
+
 async function renderAccountStatus(force = false) {
   if (rendering || !isAdmin()) return;
   const panel = document.querySelector('main .panel');
@@ -67,7 +75,7 @@ async function renderAccountStatus(force = false) {
           <div><p>LOGIN ACCESS</p><h2>Portal account access</h2></div>
           <span>${accounts.filter(item => item.portalStatus === 'ACTIVE').length} active</span>
         </div>
-        <p class="account-help">Disabled accounts remain in the database, but the portal signs them out and refuses future access until they are re-enabled.</p>
+        <p class="account-help">Click Edit account to change the person’s organizational rank, system role, permissions, linked staff profile, display name, or access status. Redeemed authorization codes remain locked.</p>
         <div class="account-access-grid">
           ${accounts.map(item => {
             const active = item.portalStatus === 'ACTIVE';
@@ -79,14 +87,20 @@ async function renderAccountStatus(force = false) {
                   <h3>${esc(item.displayName || item.portalUsername || 'Unnamed account')}</h3>
                   <p>@${esc(item.portalUsername || 'unknown')} · ${esc(item.organizationalRank || 'Staff')}</p>
                 </div>
-                ${item.id === auth.currentUser.uid || protectedOwner
-                  ? '<span class="account-protected">Protected</span>'
-                  : `<button class="account-toggle" data-uid="${item.id}" data-name="${esc(item.displayName || item.portalUsername || 'this account')}" data-next="${active ? 'DISABLED' : 'ACTIVE'}">${active ? 'Disable account' : 'Re-enable account'}</button>`}
+                <div class="account-access-actions">
+                  <button class="account-edit" data-uid="${item.id}">Edit account</button>
+                  ${item.id === auth.currentUser.uid || protectedOwner
+                    ? '<span class="account-protected">Protected</span>'
+                    : `<button class="account-toggle" data-uid="${item.id}" data-name="${esc(item.displayName || item.portalUsername || 'this account')}" data-next="${active ? 'DISABLED' : 'ACTIVE'}">${active ? 'Disable account' : 'Re-enable account'}</button>`}
+                </div>
               </article>`;
           }).join('')}
         </div>
       </section>`);
 
+    panel.querySelectorAll('.account-edit').forEach(button => {
+      button.onclick = () => openEditor(button.dataset.uid);
+    });
     panel.querySelectorAll('.account-toggle').forEach(button => {
       button.onclick = () => setAccountStatus(button.dataset.uid, button.dataset.next, button.dataset.name);
     });
@@ -107,6 +121,7 @@ function schedule() {
 const observer = new MutationObserver(schedule);
 observer.observe(document.getElementById('app'), { childList: true, subtree: true });
 window.addEventListener('canela-account-status-changed', () => renderAccountStatus(true));
+window.addEventListener('canela-account-editor-ready', schedule);
 onAuthStateChanged(auth, async user => {
   if (!user || user.isAnonymous) return;
   await loadCurrentAccount();
