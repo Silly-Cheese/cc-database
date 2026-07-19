@@ -1,750 +1,1093 @@
 rules_version = '2';
+
 service cloud.firestore {
-match /databases/{database}/documents {
-function signedIn() {
-return request.auth != null;
-}
-function isSelf(uid) {
-return signedIn() && request.auth.uid == uid;
-}
-function accountPath(uid) {
-return /databases/$(database)/documents/portalAccounts/$(uid);
-}
-function myAccountPath() {
-return accountPath(request.auth.uid);
-}
-function accountExists() {
-return signedIn() && exists(myAccountPath());
-}
-function account() {
-return get(myAccountPath()).data;
-}
-function active() {
-return accountExists()
-&& account().portalStatus == 'ACTIVE';
-}
-function hasRole(role) {
-return active()
-&& account().systemRoles is list
-&& role in account().systemRoles;
-}
-function systemOwner() {
-return hasRole('SYSTEM_OWNER');
-}
-function systemAdministrator() {
-return systemOwner()
-|| hasRole('SYSTEM_ADMINISTRATOR');
-}
-function dataAdministrator() {
-return systemAdministrator()
-|| hasRole('DATA_ADMINISTRATOR');
-}
-function auditor() {
-return systemAdministrator()
-|| hasRole('AUDITOR');
-}
-function hasPermission(permission) {
-return active()
-&& account().permissions is list
-&& (
-systemAdministrator()
-|| '*' in account().permissions
-|| permission in account().permissions
-);
-}
-function onlyChanges(fields) {
-return request.resource.data
-.diff(resource.data)
-.affectedKeys()
-.hasOnly(fields);
-}
-function hasRequired(fields) {
-return request.resource.data.keys().hasAll(fields);
-}
-function hasOnly(fields) {
-return request.resource.data.keys().hasOnly(fields);
-}
-function stringField(field) {
-return request.resource.data[field] is string;
-}
-function timestampOrNull(field) {
-return !(field in request.resource.data)
-|| request.resource.data[field] == null
-|| request.resource.data[field] is timestamp;
-}
-function bootstrapPath() {
-return /databases/$(database)/documents/system/bootstrap;
-}
-function bootstrapExists() {
-return exists(bootstrapPath());
-}
-function bootstrapData() {
-return get(bootstrapPath()).data;
-}
-function bootstrapAvailable() {
-return signedIn()
-&& bootstrapExists()
-&& bootstrapData().enabled == true
-&& bootstrapData().ownerCreated != true;
-}
-function validBootstrapAccount(uid) {
-return isSelf(uid)
-&& bootstrapAvailable()
-&& request.resource.data.displayName is string
-&& request.resource.data.portalUsername is string
-&& request.resource.data.organizationalRank == 'Vice President'
-&& request.resource.data.portalStatus == 'ACTIVE'
-&& request.resource.data.staffProfileId is string
-&& request.resource.data.systemRoles is list
-&& 'SYSTEM_OWNER' in request.resource.data.systemRoles
-&& 'SYSTEM_ADMINISTRATOR' in request.resource.data.systemRoles
-&& request.resource.data.permissions is list
-&& '*' in request.resource.data.permissions
-&& request.resource.data.bootstrapSource == 'system/bootstrap'
-&& getAfter(bootstrapPath()).data.enabled == false
-&& getAfter(bootstrapPath()).data.ownerCreated == true
-&& getAfter(bootstrapPath()).data.ownerUid == request.auth.uid;
-}
-function activationPath(codeHash) {
-return /databases/$(database)/documents/activationCodes/$(codeHash);
-}
-function activationExists(codeHash) {
-return exists(activationPath(codeHash));
-}
-function activationData(codeHash) {
-return get(activationPath(codeHash)).data;
-}
-function validActivatedAccount(uid) {
-return isSelf(uid)
-&& request.resource.data.displayName is string
-&& request.resource.data.portalUsername is string
-&& request.resource.data.organizationalRank is string
-&& request.resource.data.portalStatus == 'ACTIVE'
-&& request.resource.data.staffProfileId is string
-&& request.resource.data.systemRoles is list
-&& request.resource.data.permissions is list
-&& request.resource.data.activationCodeHash is string
-&& activationExists(request.resource.data.activationCodeHash)
-&& activationData(request.resource.data.activationCodeHash).status == 'PENDING'
-&& request.resource.data.displayName
-== activationData(request.resource.data.activationCodeHash).displayName
-&& request.resource.data.organizationalRank
-== activationData(request.resource.data.activationCodeHash).organizationalRank
-&& request.resource.data.staffProfileId
-== activationData(request.resource.data.activationCodeHash).staffProfileId
-&& request.resource.data.systemRoles
-== activationData(request.resource.data.activationCodeHash).systemRoles
-&& request.resource.data.permissions
-== activationData(request.resource.data.activationCodeHash).permissions
-&& getAfter(activationPath(request.resource.data.activationCodeHash)).data.status == 'USED'
-&& getAfter(activationPath(request.resource.data.activationCodeHash)).data.usedByUid == request.auth.uid
-&& getAfter(activationPath(request.resource.data.activationCodeHash)).data.usedUsername
-== request.resource.data.portalUsername;
-}
-match /portalAccounts/{uid} {
-allow get: if isSelf(uid) || systemAdministrator();
-allow list: if systemAdministrator();
-allow create: if validBootstrapAccount(uid)
-|| validActivatedAccount(uid);
-allow update: if systemAdministrator()
-&& (
-!('SYSTEM_OWNER' in resource.data.systemRoles)
-|| systemOwner()
-);
-allow delete: if systemOwner()
-&& request.auth.uid != uid;
-}
-match /portalUsernames/{username} {
-allow get: if signedIn();
-allow list: if systemAdministrator();
-allow create: if signedIn()
-&& request.resource.data.uid == request.auth.uid
-&& hasOnly(['uid', 'createdAt'])
-&& !exists(/databases/$(database)/documents/portalUsernames/$(username));
-allow update: if false;
-allow delete: if systemAdministrator();
-}
-match /system/bootstrap {
-allow get: if true;
-allow list: if false;
-allow create: if false;
-allow update: if (
-bootstrapAvailable()
-&& onlyChanges([
-'enabled',
-'ownerCreated',
-'ownerUid',
-'ownerUsername',
-'completedAt'
-])
-&& request.resource.data.enabled == false
-&& request.resource.data.ownerCreated == true
-&& request.resource.data.ownerUid == request.auth.uid
-&& request.resource.data.ownerUsername is string
-&& getAfter(myAccountPath()).data.portalStatus == 'ACTIVE'
-&& 'SYSTEM_OWNER' in getAfter(myAccountPath()).data.systemRoles
-&& 'SYSTEM_ADMINISTRATOR' in getAfter(myAccountPath()).data.systemRoles
-) || systemOwner();
-allow delete: if false;
-}
-match /system/{documentId} {
-allow read, write: if false;
-}
-match /activationCodes/{codeHash} {
-allow get: if signedIn();
-allow list: if systemAdministrator();
-allow create: if systemAdministrator()
-&& request.resource.data.displayName is string
-&& request.resource.data.organizationalRank is string
-&& request.resource.data.staffProfileId is string
-&& request.resource.data.systemRoles is list
-&& request.resource.data.permissions is list
-&& request.resource.data.status == 'PENDING'
-&& request.resource.data.createdBy == request.auth.uid;
-allow update: if systemAdministrator()
-|| (
-signedIn()
-&& resource.data.status == 'PENDING'
-&& onlyChanges([
-'status',
-'usedByUid',
-'usedUsername',
-'usedAt'
-])
-&& request.resource.data.status == 'USED'
-&& request.resource.data.usedByUid == request.auth.uid
-&& request.resource.data.usedUsername is string
-);
-allow delete: if systemOwner()
-|| (
-systemAdministrator()
-&& resource.data.status in ['REVOKED', 'USED', 'EXPIRED']
-);
-}
-match /bootstrapCodes/{codeId} {
-allow read, write: if false;
-}
-match /staffProfiles/{staffId} {
-allow read: if active();
-allow create: if hasPermission('staff.manage')
-&& request.resource.data.displayName is string
-&& request.resource.data.robloxUsername is string
-&& request.resource.data.organizationalRank is string
-&& request.resource.data.staffStatus is string
-&& request.resource.data.createdBy == request.auth.uid;
-allow update: if hasPermission('staff.manage')
-|| hasPermission('personnel.approve')
-|| hasPermission('quotas.review');
-allow delete: if systemAdministrator();
-}
-match /staffPrivate/{staffId} {
-allow read: if systemAdministrator()
-|| hasPermission('staff.private.read');
-allow create, update: if systemAdministrator()
-|| hasPermission('staff.private.manage');
-allow delete: if systemOwner();
-}
-match /ranks/{rankId} {
-allow read: if active();
-allow create, update: if hasPermission('organization.manage');
-allow delete: if systemAdministrator();
-}
-match /departments/{departmentId} {
-allow read: if active();
-allow create, update: if hasPermission('organization.manage');
-allow delete: if systemAdministrator();
-}
-match /teams/{teamId} {
-allow read: if active();
-allow create, update: if hasPermission('organization.manage');
-allow delete: if systemAdministrator();
-}
-match /permissionBundles/{bundleId} {
-allow read: if active();
-allow create, update: if systemAdministrator();
-allow delete: if systemOwner();
-}
-match /rankLimits/{limitId} {
-allow read: if active();
-allow create, update: if hasPermission('organization.manage');
-allow delete: if systemAdministrator();
-}
-match /personnelActions/{actionId} {
-allow read: if active();
-allow create: if active()
-&& request.resource.data.requestedBy == request.auth.uid
-&& request.resource.data.status == 'PENDING';
-allow update: if hasPermission('personnel.approve');
-allow delete: if systemAdministrator();
-}
-match /promotions/{promotionId} {
-allow read: if active();
-allow create: if hasPermission('promotions.create');
-allow update: if hasPermission('promotions.approve');
-allow delete: if systemAdministrator();
-}
-match /promotionLogs/{logId} {
-allow read: if active();
-allow create: if hasPermission('promotions.create')
-|| hasPermission('promotions.approve');
-allow update: if false;
-allow delete: if systemOwner();
-}
-match /rankChanges/{changeId} {
-allow read: if active();
-allow create: if hasPermission('personnel.approve');
-allow update: if false;
-allow delete: if systemAdministrator();
-}
-match /resignations/{resignationId} {
-allow read: if active();
-allow create: if active()
-&& request.resource.data.submittedBy == request.auth.uid;
-allow update: if hasPermission('personnel.approve');
-allow delete: if systemAdministrator();
-}
-match /terminations/{terminationId} {
-allow read: if active();
-allow create, update: if hasPermission('personnel.approve');
-allow delete: if systemOwner();
-}
-match /quotaDefinitions/{definitionId} {
-allow read: if active();
-allow create, update: if hasPermission('quotas.manage');
-allow delete: if systemAdministrator();
-}
-match /quotaPeriods/{periodId} {
-allow read: if active();
-allow create, update: if hasPermission('quotas.manage');
-allow delete: if systemAdministrator();
-}
-match /quotaSubmissions/{submissionId} {
-allow read: if active();
-allow create: if active()
-&& request.resource.data.submittedBy == request.auth.uid
-&& request.resource.data.status == 'PENDING'
-&& request.resource.data.points is number
-&& request.resource.data.points >= 0;
-allow update: if hasPermission('quotas.review');
-allow delete: if systemAdministrator();
-}
-match /quotaExemptions/{exemptionId} {
-allow read: if active();
-allow create, update: if hasPermission('quotas.manage');
-allow delete: if systemAdministrator();
-}
-match /announcements/{announcementId} {
-allow read: if active();
-allow create: if hasPermission('announcements.manage')
-&& request.resource.data.createdBy == request.auth.uid;
-allow update: if hasPermission('announcements.manage');
-allow delete: if systemAdministrator();
-}
-match /notifications/{notificationId} {
-allow read: if active()
-&& (
-resource.data.recipientUid == request.auth.uid
-|| resource.data.audience == 'EVERYONE'
-|| systemAdministrator()
-);
-allow create: if active();
-allow update: if active()
-&& (
-resource.data.recipientUid == request.auth.uid
-|| systemAdministrator()
-);
-allow delete: if systemAdministrator();
-}
-match /internalMessages/{messageId} {
-allow read: if active()
-&& (
-resource.data.sentBy == request.auth.uid
-|| request.auth.uid in resource.data.recipientUids
-|| systemAdministrator()
-);
-allow create: if active()
-&& request.resource.data.sentBy == request.auth.uid;
-allow update: if hasPermission('messages.manage');
-allow delete: if systemAdministrator();
-}
-match /offenceDefinitions/{offenceId} {
-allow read: if active();
-allow create, update: if hasPermission('discipline.manage');
-allow delete: if systemAdministrator();
-}
-match /disciplinaryCases/{caseId} {
-allow read: if active();
-allow create: if hasPermission('discipline.manage')
-&& request.resource.data.issuedBy == request.auth.uid;
-allow update: if hasPermission('discipline.manage')
-|| hasPermission('appeals.review');
-allow delete: if systemAdministrator();
-}
-match /disciplinaryEvidence/{evidenceId} {
-allow read: if active();
-allow create: if hasPermission('discipline.manage');
-allow update: if hasPermission('discipline.manage');
-allow delete: if systemAdministrator();
-}
-match /blacklists/{blacklistId} {
-allow read: if active();
-allow create: if hasPermission('blacklists.manage')
-&& request.resource.data.issuedBy == request.auth.uid;
-allow update: if hasPermission('blacklists.manage')
-|| hasPermission('appeals.review');
-allow delete: if systemAdministrator();
-}
-match /appeals/{appealId} {
-allow read: if active();
-allow create: if active()
-&& request.resource.data.status == 'SUBMITTED';
-allow update: if hasPermission('appeals.review');
-allow delete: if systemAdministrator();
-}
-match /appealMessages/{messageId} {
-allow read: if active();
-allow create: if active()
-&& request.resource.data.authorUid == request.auth.uid;
-allow update: if false;
-allow delete: if systemAdministrator();
-}
-match /alliances/{allianceId} {
-allow read: if active();
-allow create: if hasPermission('alliances.manage')
-&& request.resource.data.createdBy == request.auth.uid;
-allow update: if hasPermission('alliances.manage');
-allow delete: if systemAdministrator();
-}
-match /allianceRepresentatives/{representativeId} {
-allow read: if active();
-allow create, update: if hasPermission('alliances.manage');
-allow delete: if systemAdministrator();
-}
-match /allianceActions/{actionId} {
-allow read: if active();
-allow create: if hasPermission('alliances.manage');
-allow update: if false;
-allow delete: if systemAdministrator();
-}
-match /allianceStrikes/{strikeId} {
-allow read: if active();
-allow create, update: if hasPermission('alliances.manage');
-allow delete: if systemAdministrator();
-}
-match /applicationForms/{formId} {
-allow read: if active();
-allow create, update: if hasPermission('applications.manage');
-allow delete: if systemAdministrator();
-}
-match /applications/{applicationId} {
-allow read: if active();
-allow create: if active()
-&& request.resource.data.status == 'SUBMITTED';
-allow update: if hasPermission('applications.review');
-allow delete: if systemAdministrator();
-}
-match /applicationReviews/{reviewId} {
-allow read: if active();
-allow create, update: if hasPermission('applications.review');
-allow delete: if systemAdministrator();
-}
-match /courses/{courseId} {
-allow read: if active();
-allow create, update: if hasPermission('training.manage');
-allow delete: if systemAdministrator();
-}
-match /courseModules/{moduleId} {
-allow read: if active();
-allow create, update: if hasPermission('training.manage');
-allow delete: if systemAdministrator();
-}
-match /courseLessons/{lessonId} {
-allow read: if active();
-allow create, update: if hasPermission('training.manage');
-allow delete: if systemAdministrator();
-}
-match /courseQuestions/{questionId} {
-allow read: if active();
-allow create, update: if hasPermission('training.manage');
-allow delete: if systemAdministrator();
-}
-match /courseAssignments/{assignmentId} {
-allow read: if active();
-allow create: if hasPermission('training.assign');
-allow update: if hasPermission('training.grade')
-|| hasPermission('training.manage');
-allow delete: if systemAdministrator();
-}
-match /courseAttempts/{attemptId} {
-allow read: if active()
-&& (
-resource.data.userUid == request.auth.uid
-|| hasPermission('training.grade')
-|| hasPermission('training.manage')
-);
-allow create: if active()
-&& request.resource.data.userUid == request.auth.uid;
-allow update: if hasPermission('training.grade');
-allow delete: if systemAdministrator();
-}
-match /courseCertificates/{certificateId} {
-allow read: if active();
-allow create, update: if hasPermission('training.grade')
-|| hasPermission('training.manage');
-allow delete: if systemAdministrator();
-}
-match /trainingRequirements/{requirementId} {
-allow read: if active();
-allow create, update: if hasPermission('training.manage');
-allow delete: if systemAdministrator();
-}
-match /trainingProgress/{progressId} {
-allow read: if active();
-allow create, update: if active()
-&& (
-request.resource.data.userUid == request.auth.uid
-|| hasPermission('training.grade')
-|| hasPermission('training.manage')
-);
-allow delete: if systemAdministrator();
-}
-match /internshipCompletions/{completionId} {
-allow read: if active();
-allow create, update: if hasPermission('training.manage');
-allow delete: if systemAdministrator()
-|| hasPermission('training.manage');
-}
-match /internshipAssignments/{assignmentId} {
-allow read: if active();
-allow create, update: if hasPermission('training.assign')
-|| hasPermission('training.manage');
-allow delete: if systemAdministrator();
-}
-match /certifications/{certificationId} {
-allow read: if active();
-allow create, update: if hasPermission('training.manage');
-allow delete: if systemAdministrator();
-}
-match /reviewTemplates/{templateId} {
-allow read: if active();
-allow create, update: if hasPermission('reviews.manage');
-allow delete: if systemAdministrator();
-}
-match /performanceReviews/{reviewId} {
-allow read: if active();
-allow create: if hasPermission('reviews.submit');
-allow update: if hasPermission('reviews.approve')
-|| hasPermission('reviews.manage');
-allow delete: if systemAdministrator();
-}
-match /goalAssignments/{goalId} {
-allow read: if active();
-allow create, update: if hasPermission('goals.manage');
-allow delete: if systemAdministrator();
-}
-match /recognitions/{recognitionId} {
-allow read: if active();
-allow create, update: if hasPermission('recognitions.manage');
-allow delete: if systemAdministrator();
-}
-match /leaveRequests/{leaveId} {
-allow read: if active();
-allow create: if active()
-&& request.resource.data.submittedBy == request.auth.uid;
-allow update: if hasPermission('leave.approve');
-allow delete: if systemAdministrator();
-}
-match /attendanceRecords/{recordId} {
-allow read: if active();
-allow create, update: if hasPermission('attendance.manage');
-allow delete: if systemAdministrator();
-}
-match /attendanceSessions/{sessionId} {
-allow read: if active();
-allow create, update: if hasPermission('attendance.manage');
-allow delete: if systemAdministrator();
-}
-match /documents/{documentId} {
-allow read: if active();
-allow create, update: if hasPermission('documents.manage');
-allow delete: if systemAdministrator();
-}
-match /documentVersions/{versionId} {
-allow read: if active();
-allow create: if hasPermission('documents.manage');
-allow update: if false;
-allow delete: if systemAdministrator();
-}
-match /policies/{policyId} {
-allow read: if active();
-allow create, update: if hasPermission('documents.manage');
-allow delete: if systemAdministrator();
-}
-match /policyAcknowledgements/{acknowledgementId} {
-allow read: if active();
-allow create: if active()
-&& request.resource.data.userUid == request.auth.uid;
-allow update: if false;
-allow delete: if systemAdministrator();
-}
-match /forms/{formId} {
-allow read: if active();
-allow create, update: if hasPermission('forms.manage');
-allow delete: if systemAdministrator();
-}
-match /formResponses/{responseId} {
-allow read: if active();
-allow create: if active()
-&& request.resource.data.submittedBy == request.auth.uid;
-allow update: if hasPermission('forms.manage');
-allow delete: if systemAdministrator();
-}
-match /dashboardLayouts/{uid} {
-allow read, create, update: if active()
-&& (
-request.auth.uid == uid
-|| systemAdministrator()
-);
-allow delete: if isSelf(uid)
-|| systemAdministrator();
-}
-match /employeeTimeline/{eventId} {
-allow read: if active();
-allow create: if active()
-&& request.resource.data.createdBy == request.auth.uid;
-allow update: if false;
-allow delete: if systemAdministrator();
-}
-match /auditLogs/{auditId} {
-allow read: if hasPermission('audit.read')
-|| auditor();
-allow create: if signedIn()
-&& request.resource.data.actorUid == request.auth.uid
-&& request.resource.data.action is string;
-allow update, delete: if false;
-}
-match /payrollProfiles/{profileId} {
-allow read: if active()
-&& (
-resource.data.userUid == request.auth.uid
-|| hasPermission('payroll.read')
-|| hasPermission('payroll.manage')
-);
-allow create, update: if hasPermission('payroll.manage');
-allow delete: if systemOwner();
-}
-match /payPeriods/{periodId} {
-allow read: if hasPermission('payroll.read')
-|| hasPermission('payroll.manage');
-allow create, update: if hasPermission('payroll.manage');
-allow delete: if systemOwner();
-}
-match /payRequests/{requestId} {
-allow read: if active()
-&& (
-resource.data.requestedBy == request.auth.uid
-|| hasPermission('payroll.read')
-|| hasPermission('payroll.manage')
-);
-allow create: if active()
-&& request.resource.data.requestedBy == request.auth.uid;
-allow update: if hasPermission('payroll.approve')
-|| hasPermission('payroll.manage');
-allow delete: if systemAdministrator();
-}
-match /paystubs/{paystubId} {
-allow read: if active()
-&& (
-resource.data.userUid == request.auth.uid
-|| hasPermission('payroll.read')
-|| hasPermission('payroll.manage')
-);
-allow create, update: if hasPermission('payroll.manage');
-allow delete: if systemOwner();
-}
-match /expenses/{expenseId} {
-allow read: if hasPermission('finance.read')
-|| hasPermission('finance.manage');
-allow create, update: if hasPermission('finance.manage');
-allow delete: if systemAdministrator();
-}
-match /financialAudits/{auditId} {
-allow read: if hasPermission('finance.audit')
-|| systemAdministrator();
-allow create: if hasPermission('finance.audit');
-allow update, delete: if false;
-}
-match /inventoryItems/{itemId} {
-allow read: if active();
-allow create, update: if hasPermission('inventory.manage');
-allow delete: if systemAdministrator();
-}
-match /inventoryAssignments/{assignmentId} {
-allow read: if active();
-allow create, update: if hasPermission('inventory.manage');
-allow delete: if systemAdministrator();
-}
-match /inventoryTransactions/{transactionId} {
-allow read: if active();
-allow create: if hasPermission('inventory.manage');
-allow update, delete: if false;
-}
-match /systemSettings/{settingId} {
-allow read: if active();
-allow create, update: if systemAdministrator();
-allow delete: if systemOwner();
-}
-match /featureFlags/{flagId} {
-allow read: if active();
-allow create, update: if systemAdministrator();
-allow delete: if systemOwner();
-}
-match /maintenanceNotices/{noticeId} {
-allow read: if true;
-allow create, update: if systemAdministrator();
-allow delete: if systemOwner();
-}
-match /deactivationAppeals/{appealId} {
-allow get, list: if hasPermission('appeals.review')
-|| (
-signedIn()
-&& resource.data.accountUid == request.auth.uid
-);
-allow create: if signedIn()
-&& accountExists()
-&& request.resource.data.accountUid == request.auth.uid
-&& request.resource.data.submittedBy == request.auth.uid
-&& request.resource.data.status == 'PENDING'
-&& request.resource.data.displayName is string
-&& request.resource.data.portalUsername is string
-&& request.resource.data.deactivationReason is string
-&& request.resource.data.appealReason is string
-&& request.resource.data.appealReason.size() >= 25
-&& request.resource.data.contactMethod is string
-&& request.resource.data.submittedAt == request.time;
-allow update: if hasPermission('appeals.review');
-allow delete: if systemAdministrator();
-}
-match /deactivationAppeals/{appealId}/messages/{messageId} {
-function parentAppeal() {
-return get(/databases/$(database)/documents/deactivationAppeals/$(appealId)).data;
-}
-function ownsParentAppeal() {
-return signedIn()
-&& parentAppeal().accountUid == request.auth.uid;
-}
-allow read: if hasPermission('appeals.review')
-|| ownsParentAppeal();
-allow create: if (hasPermission('appeals.review') || ownsParentAppeal())
-&& request.resource.data.authorUid == request.auth.uid
-&& request.resource.data.message is string
-&& request.resource.data.message.size() > 0
-&& request.resource.data.createdAt == request.time;
-allow update: if false;
-allow delete: if systemAdministrator();
-}
-match /{document=**} {
-allow read, write: if false;
-}
-}
+  match /databases/{database}/documents {
+
+    // ============================================================
+    // CORE AUTHENTICATION HELPERS
+    // ============================================================
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function accountPath(uid) {
+      return /databases/$(database)/documents/portalAccounts/$(uid);
+    }
+
+    function myAccountPath() {
+      return accountPath(request.auth.uid);
+    }
+
+    function accountExists() {
+      return signedIn() && exists(myAccountPath());
+    }
+
+    function account() {
+      return get(myAccountPath()).data;
+    }
+
+    function active() {
+      return accountExists()
+        && account().portalStatus == 'ACTIVE';
+    }
+
+    function hasRole(role) {
+      return active()
+        && account().systemRoles is list
+        && role in account().systemRoles;
+    }
+
+    function systemOwner() {
+      return hasRole('SYSTEM_OWNER');
+    }
+
+    function systemAdministrator() {
+      return systemOwner()
+        || hasRole('SYSTEM_ADMINISTRATOR');
+    }
+
+    function dataAdministrator() {
+      return systemAdministrator()
+        || hasRole('DATA_ADMINISTRATOR');
+    }
+
+    function auditor() {
+      return systemAdministrator()
+        || hasRole('AUDITOR');
+    }
+
+    function hasPermission(permission) {
+      return active()
+        && account().permissions is list
+        && (
+          systemAdministrator()
+          || '*' in account().permissions
+          || permission in account().permissions
+        );
+    }
+
+    function onlyChanges(fields) {
+      return request.resource.data
+        .diff(resource.data)
+        .affectedKeys()
+        .hasOnly(fields);
+    }
+
+    function hasRequired(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnly(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function stringField(field) {
+      return request.resource.data[field] is string;
+    }
+
+    function timestampOrNull(field) {
+      return !(field in request.resource.data)
+        || request.resource.data[field] == null
+        || request.resource.data[field] is timestamp;
+    }
+
+    // ============================================================
+    // BOOTSTRAP HELPERS
+    // ============================================================
+
+    function bootstrapPath() {
+      return /databases/$(database)/documents/system/bootstrap;
+    }
+
+    function bootstrapExists() {
+      return exists(bootstrapPath());
+    }
+
+    function bootstrapData() {
+      return get(bootstrapPath()).data;
+    }
+
+    function bootstrapAvailable() {
+      return signedIn()
+        && bootstrapExists()
+        && bootstrapData().enabled == true
+        && bootstrapData().ownerCreated != true;
+    }
+
+    function validBootstrapAccount(uid) {
+      return isSelf(uid)
+        && bootstrapAvailable()
+        && request.resource.data.displayName is string
+        && request.resource.data.portalUsername is string
+        && request.resource.data.organizationalRank == 'Vice President'
+        && request.resource.data.portalStatus == 'ACTIVE'
+        && request.resource.data.staffProfileId is string
+        && request.resource.data.systemRoles is list
+        && 'SYSTEM_OWNER' in request.resource.data.systemRoles
+        && 'SYSTEM_ADMINISTRATOR' in request.resource.data.systemRoles
+        && request.resource.data.permissions is list
+        && '*' in request.resource.data.permissions
+        && request.resource.data.bootstrapSource == 'system/bootstrap'
+        && getAfter(bootstrapPath()).data.enabled == false
+        && getAfter(bootstrapPath()).data.ownerCreated == true
+        && getAfter(bootstrapPath()).data.ownerUid == request.auth.uid;
+    }
+
+    // ============================================================
+    // ACTIVATION HELPERS
+    // ============================================================
+
+    function activationPath(codeHash) {
+      return /databases/$(database)/documents/activationCodes/$(codeHash);
+    }
+
+    function activationExists(codeHash) {
+      return exists(activationPath(codeHash));
+    }
+
+    function activationData(codeHash) {
+      return get(activationPath(codeHash)).data;
+    }
+
+    function validActivatedAccount(uid) {
+      return isSelf(uid)
+        && request.resource.data.displayName is string
+        && request.resource.data.portalUsername is string
+        && request.resource.data.organizationalRank is string
+        && request.resource.data.portalStatus == 'ACTIVE'
+        && request.resource.data.staffProfileId is string
+        && request.resource.data.systemRoles is list
+        && request.resource.data.permissions is list
+        && request.resource.data.activationCodeHash is string
+        && activationExists(request.resource.data.activationCodeHash)
+        && activationData(request.resource.data.activationCodeHash).status == 'PENDING'
+        && request.resource.data.displayName
+          == activationData(request.resource.data.activationCodeHash).displayName
+        && request.resource.data.organizationalRank
+          == activationData(request.resource.data.activationCodeHash).organizationalRank
+        && request.resource.data.staffProfileId
+          == activationData(request.resource.data.activationCodeHash).staffProfileId
+        && request.resource.data.systemRoles
+          == activationData(request.resource.data.activationCodeHash).systemRoles
+        && request.resource.data.permissions
+          == activationData(request.resource.data.activationCodeHash).permissions
+        && getAfter(activationPath(request.resource.data.activationCodeHash)).data.status == 'USED'
+        && getAfter(activationPath(request.resource.data.activationCodeHash)).data.usedByUid == request.auth.uid
+        && getAfter(activationPath(request.resource.data.activationCodeHash)).data.usedUsername
+          == request.resource.data.portalUsername;
+    }
+
+    // ============================================================
+    // PORTAL ACCOUNTS
+    // ============================================================
+
+    match /portalAccounts/{uid} {
+      allow get: if isSelf(uid) || systemAdministrator();
+      allow list: if systemAdministrator();
+
+      allow create: if validBootstrapAccount(uid)
+        || validActivatedAccount(uid);
+
+      allow update: if (
+        systemAdministrator()
+        && (
+          !('SYSTEM_OWNER' in resource.data.systemRoles)
+          || systemOwner()
+        )
+      ) || (
+        hasPermission('appeals.review')
+        && resource.data.portalStatus != 'ACTIVE'
+        && request.resource.data.portalStatus == 'ACTIVE'
+        && onlyChanges([
+          'portalStatus',
+          'reactivatedAt',
+          'reactivatedBy',
+          'reactivatedByName',
+          'statusChangedAt',
+          'statusChangedBy'
+        ])
+        && request.resource.data.reactivatedBy == request.auth.uid
+        && request.resource.data.statusChangedBy == request.auth.uid
+      );
+
+      allow delete: if systemOwner()
+        && request.auth.uid != uid;
+    }
+
+    // ============================================================
+    // USERNAME REGISTRY
+    // ============================================================
+
+    match /portalUsernames/{username} {
+      allow get: if signedIn();
+      allow list: if systemAdministrator();
+
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && hasOnly(['uid', 'createdAt'])
+        && !exists(/databases/$(database)/documents/portalUsernames/$(username));
+
+      allow update: if false;
+      allow delete: if systemAdministrator();
+    }
+
+    // ============================================================
+    // INITIAL SYSTEM OWNER BOOTSTRAP
+    // ============================================================
+
+    match /system/bootstrap {
+      allow get: if true;
+      allow list: if false;
+      allow create: if false;
+
+      allow update: if (
+        bootstrapAvailable()
+        && onlyChanges([
+          'enabled',
+          'ownerCreated',
+          'ownerUid',
+          'ownerUsername',
+          'completedAt'
+        ])
+        && request.resource.data.enabled == false
+        && request.resource.data.ownerCreated == true
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUsername is string
+        && getAfter(myAccountPath()).data.portalStatus == 'ACTIVE'
+        && 'SYSTEM_OWNER' in getAfter(myAccountPath()).data.systemRoles
+        && 'SYSTEM_ADMINISTRATOR' in getAfter(myAccountPath()).data.systemRoles
+      ) || systemOwner();
+
+      allow delete: if false;
+    }
+
+    match /system/{documentId} {
+      allow read, write: if false;
+    }
+
+    // ============================================================
+    // ACTIVATION CODES
+    // ============================================================
+
+    match /activationCodes/{codeHash} {
+      allow get: if signedIn();
+      allow list: if systemAdministrator();
+
+      allow create: if systemAdministrator()
+        && request.resource.data.displayName is string
+        && request.resource.data.organizationalRank is string
+        && request.resource.data.staffProfileId is string
+        && request.resource.data.systemRoles is list
+        && request.resource.data.permissions is list
+        && request.resource.data.status == 'PENDING'
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update: if systemAdministrator()
+        || (
+          signedIn()
+          && resource.data.status == 'PENDING'
+          && onlyChanges([
+            'status',
+            'usedByUid',
+            'usedUsername',
+            'usedAt'
+          ])
+          && request.resource.data.status == 'USED'
+          && request.resource.data.usedByUid == request.auth.uid
+          && request.resource.data.usedUsername is string
+        );
+
+      allow delete: if systemOwner()
+        || (
+          systemAdministrator()
+          && resource.data.status in ['REVOKED', 'USED', 'EXPIRED']
+        );
+    }
+
+    match /bootstrapCodes/{codeId} {
+      allow read, write: if false;
+    }
+
+    // ============================================================
+    // STAFF DIRECTORY
+    // ============================================================
+
+    match /staffProfiles/{staffId} {
+      allow read: if active();
+
+      allow create: if hasPermission('staff.manage')
+        && request.resource.data.displayName is string
+        && request.resource.data.robloxUsername is string
+        && request.resource.data.organizationalRank is string
+        && request.resource.data.staffStatus is string
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update: if hasPermission('staff.manage')
+        || hasPermission('personnel.approve')
+        || hasPermission('quotas.review');
+
+      allow delete: if systemAdministrator();
+    }
+
+    match /staffPrivate/{staffId} {
+      allow read: if systemAdministrator()
+        || hasPermission('staff.private.read');
+      allow create, update: if systemAdministrator()
+        || hasPermission('staff.private.manage');
+      allow delete: if systemOwner();
+    }
+
+    // ============================================================
+    // ORGANIZATIONAL STRUCTURE
+    // ============================================================
+
+    match /ranks/{rankId} {
+      allow read: if active();
+      allow create, update: if hasPermission('organization.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /departments/{departmentId} {
+      allow read: if active();
+      allow create, update: if hasPermission('organization.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /teams/{teamId} {
+      allow read: if active();
+      allow create, update: if hasPermission('organization.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /permissionBundles/{bundleId} {
+      allow read: if active();
+      allow create, update: if systemAdministrator();
+      allow delete: if systemOwner();
+    }
+
+    match /rankLimits/{limitId} {
+      allow read: if active();
+      allow create, update: if hasPermission('organization.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    // ============================================================
+    // PERSONNEL ACTIONS
+    // ============================================================
+
+    match /personnelActions/{actionId} {
+      allow read: if active();
+
+      allow create: if active()
+        && request.resource.data.requestedBy == request.auth.uid
+        && request.resource.data.status == 'PENDING';
+
+      allow update: if hasPermission('personnel.approve');
+
+      allow delete: if systemAdministrator();
+    }
+
+    match /promotions/{promotionId} {
+      allow read: if active();
+      allow create: if hasPermission('promotions.create');
+      allow update: if hasPermission('promotions.approve');
+      allow delete: if systemAdministrator();
+    }
+
+    match /promotionLogs/{logId} {
+      allow read: if active();
+      allow create: if hasPermission('promotions.create')
+        || hasPermission('promotions.approve');
+      allow update: if false;
+      allow delete: if systemOwner();
+    }
+
+    match /rankChanges/{changeId} {
+      allow read: if active();
+      allow create: if hasPermission('personnel.approve');
+      allow update: if false;
+      allow delete: if systemAdministrator();
+    }
+
+    match /resignations/{resignationId} {
+      allow read: if active();
+      allow create: if active()
+        && request.resource.data.submittedBy == request.auth.uid;
+      allow update: if hasPermission('personnel.approve');
+      allow delete: if systemAdministrator();
+    }
+
+    match /terminations/{terminationId} {
+      allow read: if active();
+      allow create, update: if hasPermission('personnel.approve');
+      allow delete: if systemOwner();
+    }
+
+    // ============================================================
+    // QUOTAS
+    // ============================================================
+
+    match /quotaDefinitions/{definitionId} {
+      allow read: if active();
+      allow create, update: if hasPermission('quotas.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /quotaPeriods/{periodId} {
+      allow read: if active();
+      allow create, update: if hasPermission('quotas.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /quotaSubmissions/{submissionId} {
+      allow read: if active();
+
+      allow create: if active()
+        && request.resource.data.submittedBy == request.auth.uid
+        && request.resource.data.status == 'PENDING'
+        && request.resource.data.points is number
+        && request.resource.data.points >= 0;
+
+      allow update: if hasPermission('quotas.review');
+      allow delete: if systemAdministrator();
+    }
+
+    match /quotaExemptions/{exemptionId} {
+      allow read: if active();
+      allow create, update: if hasPermission('quotas.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    // ============================================================
+    // DEACTIVATION APPEALS
+    // ============================================================
+
+    match /deactivationAppeals/{appealId} {
+      allow get: if signedIn()
+        && (
+          resource.data.accountUid == request.auth.uid
+          || hasPermission('appeals.review')
+        );
+
+      allow list: if signedIn()
+        && (
+          hasPermission('appeals.review')
+          || resource.data.accountUid == request.auth.uid
+        );
+
+      allow create: if signedIn()
+        && accountExists()
+        && account().portalStatus != 'ACTIVE'
+        && request.resource.data.accountUid == request.auth.uid
+        && request.resource.data.submittedBy == request.auth.uid
+        && request.resource.data.appealType == 'ACCOUNT_DEACTIVATION'
+        && request.resource.data.status == 'PENDING'
+        && request.resource.data.appealTitle is string
+        && request.resource.data.appealTitle.size() >= 1
+        && request.resource.data.appealTitle.size() <= 100
+        && request.resource.data.appealReason is string
+        && request.resource.data.appealReason.size() >= 25
+        && request.resource.data.contactMethod is string
+        && request.resource.data.contactMethod.size() >= 1
+        && request.resource.data.displayName is string
+        && request.resource.data.portalUsername is string
+        && request.resource.data.organizationalRank is string
+        && request.resource.data.deactivationReason is string
+        && request.resource.data.additionalContext is string
+        && request.resource.data.submittedAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.keys().hasOnly([
+          'appealType',
+          'appealTitle',
+          'accountUid',
+          'displayName',
+          'portalUsername',
+          'organizationalRank',
+          'deactivationReason',
+          'appealReason',
+          'additionalContext',
+          'contactMethod',
+          'status',
+          'submittedAt',
+          'updatedAt',
+          'submittedBy'
+        ]);
+
+      allow update: if hasPermission('appeals.review')
+        && request.resource.data.accountUid == resource.data.accountUid
+        && request.resource.data.submittedBy == resource.data.submittedBy
+        && request.resource.data.appealType == resource.data.appealType
+        && request.resource.data.submittedAt == resource.data.submittedAt
+        && request.resource.data.status in [
+          'PENDING',
+          'NEEDS_INFORMATION',
+          'APPROVED',
+          'DENIED'
+        ]
+        && onlyChanges([
+          'status',
+          'assignedReviewer',
+          'assignedReviewerName',
+          'assignedAt',
+          'reviewNotes',
+          'decisionReason',
+          'reviewedAt',
+          'reviewedBy',
+          'reviewedByName',
+          'updatedAt'
+        ])
+        && request.resource.data.assignedReviewer == request.auth.uid
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if systemAdministrator();
+
+      match /messages/{messageId} {
+        allow read: if signedIn()
+          && (
+            get(/databases/$(database)/documents/deactivationAppeals/$(appealId)).data.accountUid
+              == request.auth.uid
+            || hasPermission('appeals.review')
+          );
+
+        allow create: if signedIn()
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.message is string
+          && request.resource.data.message.size() >= 1
+          && request.resource.data.createdAt == request.time
+          && (
+            get(/databases/$(database)/documents/deactivationAppeals/$(appealId)).data.accountUid
+              == request.auth.uid
+            || hasPermission('appeals.review')
+          );
+
+        allow update: if false;
+        allow delete: if systemAdministrator();
+      }
+    }
+
+    // ============================================================
+    // ANNOUNCEMENTS AND COMMUNICATIONS
+    // ============================================================
+
+    match /announcements/{announcementId} {
+      allow read: if active();
+
+      allow create: if hasPermission('announcements.manage')
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update: if hasPermission('announcements.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if active()
+        && (
+          resource.data.recipientUid == request.auth.uid
+          || resource.data.audience == 'EVERYONE'
+          || systemAdministrator()
+        );
+
+      allow create: if active();
+      allow update: if active()
+        && (
+          resource.data.recipientUid == request.auth.uid
+          || systemAdministrator()
+        );
+      allow delete: if systemAdministrator();
+    }
+
+    match /internalMessages/{messageId} {
+      allow read: if active()
+        && (
+          resource.data.sentBy == request.auth.uid
+          || request.auth.uid in resource.data.recipientUids
+          || systemAdministrator()
+        );
+
+      allow create: if active()
+        && request.resource.data.sentBy == request.auth.uid;
+
+      allow update: if hasPermission('messages.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    // ============================================================
+    // DISCIPLINE, OFFENCES, AND BLACKLISTS
+    // ============================================================
+
+    match /offenceDefinitions/{offenceId} {
+      allow read: if active();
+      allow create, update: if hasPermission('discipline.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /disciplinaryCases/{caseId} {
+      allow read: if active();
+
+      allow create: if hasPermission('discipline.manage')
+        && request.resource.data.issuedBy == request.auth.uid;
+
+      allow update: if hasPermission('discipline.manage')
+        || hasPermission('appeals.review');
+
+      allow delete: if systemAdministrator();
+    }
+
+    match /disciplinaryEvidence/{evidenceId} {
+      allow read: if active();
+      allow create: if hasPermission('discipline.manage');
+      allow update: if hasPermission('discipline.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /blacklists/{blacklistId} {
+      allow read: if active();
+
+      allow create: if hasPermission('blacklists.manage')
+        && request.resource.data.issuedBy == request.auth.uid;
+
+      allow update: if hasPermission('blacklists.manage')
+        || hasPermission('appeals.review');
+
+      allow delete: if systemAdministrator();
+    }
+
+    match /appeals/{appealId} {
+      allow read: if active();
+
+      allow create: if active()
+        && request.resource.data.status == 'SUBMITTED';
+
+      allow update: if hasPermission('appeals.review');
+      allow delete: if systemAdministrator();
+    }
+
+    match /appealMessages/{messageId} {
+      allow read: if active();
+      allow create: if active()
+        && request.resource.data.authorUid == request.auth.uid;
+      allow update: if false;
+      allow delete: if systemAdministrator();
+    }
+
+    // ============================================================
+    // ALLIANCES AND PUBLIC RELATIONS
+    // ============================================================
+
+    match /alliances/{allianceId} {
+      allow read: if active();
+
+      allow create: if hasPermission('alliances.manage')
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update: if hasPermission('alliances.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /allianceRepresentatives/{representativeId} {
+      allow read: if active();
+      allow create, update: if hasPermission('alliances.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /allianceActions/{actionId} {
+      allow read: if active();
+      allow create: if hasPermission('alliances.manage');
+      allow update: if false;
+      allow delete: if systemAdministrator();
+    }
+
+    match /allianceStrikes/{strikeId} {
+      allow read: if active();
+      allow create, update: if hasPermission('alliances.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    // ============================================================
+    // APPLICATIONS
+    // ============================================================
+
+    match /applicationForms/{formId} {
+      allow read: if active();
+      allow create, update: if hasPermission('applications.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /applications/{applicationId} {
+      allow read: if active();
+      allow create: if active()
+        && request.resource.data.status == 'SUBMITTED';
+      allow update: if hasPermission('applications.review');
+      allow delete: if systemAdministrator();
+    }
+
+    match /applicationReviews/{reviewId} {
+      allow read: if active();
+      allow create, update: if hasPermission('applications.review');
+      allow delete: if systemAdministrator();
+    }
+
+    // ============================================================
+    // TRAINING, COURSES, AND INTERNSHIPS
+    // ============================================================
+
+    match /courses/{courseId} {
+      allow read: if active();
+      allow create, update: if hasPermission('training.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /courseModules/{moduleId} {
+      allow read: if active();
+      allow create, update: if hasPermission('training.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /courseLessons/{lessonId} {
+      allow read: if active();
+      allow create, update: if hasPermission('training.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /courseQuestions/{questionId} {
+      allow read: if active();
+      allow create, update: if hasPermission('training.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /courseAssignments/{assignmentId} {
+      allow read: if active();
+      allow create: if hasPermission('training.assign');
+      allow update: if hasPermission('training.grade')
+        || hasPermission('training.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /courseAttempts/{attemptId} {
+      allow read: if active()
+        && (
+          resource.data.userUid == request.auth.uid
+          || hasPermission('training.grade')
+          || hasPermission('training.manage')
+        );
+
+      allow create: if active()
+        && request.resource.data.userUid == request.auth.uid;
+
+      allow update: if hasPermission('training.grade');
+      allow delete: if systemAdministrator();
+    }
+
+    match /courseCertificates/{certificateId} {
+      allow read: if active();
+      allow create, update: if hasPermission('training.grade')
+        || hasPermission('training.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /trainingRequirements/{requirementId} {
+      allow read: if active();
+      allow create, update: if hasPermission('training.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /trainingProgress/{progressId} {
+      allow read: if active();
+
+      allow create, update: if active()
+        && (
+          request.resource.data.userUid == request.auth.uid
+          || hasPermission('training.grade')
+          || hasPermission('training.manage')
+        );
+
+      allow delete: if systemAdministrator();
+    }
+
+    match /internshipCompletions/{completionId} {
+      allow read: if active();
+      allow create, update: if hasPermission('training.manage');
+      allow delete: if systemAdministrator()
+        || hasPermission('training.manage');
+    }
+
+    match /internshipAssignments/{assignmentId} {
+      allow read: if active();
+      allow create, update: if hasPermission('training.assign')
+        || hasPermission('training.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /certifications/{certificationId} {
+      allow read: if active();
+      allow create, update: if hasPermission('training.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    // ============================================================
+    // PERFORMANCE REVIEWS, GOALS, AND RECOGNITION
+    // ============================================================
+
+    match /reviewTemplates/{templateId} {
+      allow read: if active();
+      allow create, update: if hasPermission('reviews.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /performanceReviews/{reviewId} {
+      allow read: if active();
+      allow create: if hasPermission('reviews.submit');
+      allow update: if hasPermission('reviews.approve')
+        || hasPermission('reviews.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /goalAssignments/{goalId} {
+      allow read: if active();
+      allow create, update: if hasPermission('goals.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /recognitions/{recognitionId} {
+      allow read: if active();
+      allow create, update: if hasPermission('recognitions.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    // ============================================================
+    // LEAVE AND ATTENDANCE
+    // ============================================================
+
+    match /leaveRequests/{leaveId} {
+      allow read: if active();
+
+      allow create: if active()
+        && request.resource.data.submittedBy == request.auth.uid;
+
+      allow update: if hasPermission('leave.approve');
+      allow delete: if systemAdministrator();
+    }
+
+    match /attendanceRecords/{recordId} {
+      allow read: if active();
+      allow create, update: if hasPermission('attendance.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /attendanceSessions/{sessionId} {
+      allow read: if active();
+      allow create, update: if hasPermission('attendance.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    // ============================================================
+    // DOCUMENTS, POLICIES, AND FORMS
+    // ============================================================
+
+    match /documents/{documentId} {
+      allow read: if active();
+      allow create, update: if hasPermission('documents.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /documentVersions/{versionId} {
+      allow read: if active();
+      allow create: if hasPermission('documents.manage');
+      allow update: if false;
+      allow delete: if systemAdministrator();
+    }
+
+    match /policies/{policyId} {
+      allow read: if active();
+      allow create, update: if hasPermission('documents.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /policyAcknowledgements/{acknowledgementId} {
+      allow read: if active();
+
+      allow create: if active()
+        && request.resource.data.userUid == request.auth.uid;
+
+      allow update: if false;
+      allow delete: if systemAdministrator();
+    }
+
+    match /forms/{formId} {
+      allow read: if active();
+      allow create, update: if hasPermission('forms.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /formResponses/{responseId} {
+      allow read: if active();
+
+      allow create: if active()
+        && request.resource.data.submittedBy == request.auth.uid;
+
+      allow update: if hasPermission('forms.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    // ============================================================
+    // DASHBOARDS, TIMELINES, AND AUDIT LOGS
+    // ============================================================
+
+    match /dashboardLayouts/{uid} {
+      allow read, create, update: if active()
+        && (
+          request.auth.uid == uid
+          || systemAdministrator()
+        );
+
+      allow delete: if isSelf(uid)
+        || systemAdministrator();
+    }
+
+    match /employeeTimeline/{eventId} {
+      allow read: if active();
+
+      allow create: if active()
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update: if false;
+      allow delete: if systemAdministrator();
+    }
+
+    match /auditLogs/{auditId} {
+      allow read: if hasPermission('audit.read')
+        || auditor();
+
+      allow create: if signedIn()
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.action is string;
+
+      allow update, delete: if false;
+    }
+
+    // ============================================================
+    // FINANCE AND PAYROLL
+    // ============================================================
+
+    match /payrollProfiles/{profileId} {
+      allow read: if active()
+        && (
+          resource.data.userUid == request.auth.uid
+          || hasPermission('payroll.read')
+          || hasPermission('payroll.manage')
+        );
+
+      allow create, update: if hasPermission('payroll.manage');
+      allow delete: if systemOwner();
+    }
+
+    match /payPeriods/{periodId} {
+      allow read: if hasPermission('payroll.read')
+        || hasPermission('payroll.manage');
+      allow create, update: if hasPermission('payroll.manage');
+      allow delete: if systemOwner();
+    }
+
+    match /payRequests/{requestId} {
+      allow read: if active()
+        && (
+          resource.data.requestedBy == request.auth.uid
+          || hasPermission('payroll.read')
+          || hasPermission('payroll.manage')
+        );
+
+      allow create: if active()
+        && request.resource.data.requestedBy == request.auth.uid;
+
+      allow update: if hasPermission('payroll.approve')
+        || hasPermission('payroll.manage');
+
+      allow delete: if systemAdministrator();
+    }
+
+    match /paystubs/{paystubId} {
+      allow read: if active()
+        && (
+          resource.data.userUid == request.auth.uid
+          || hasPermission('payroll.read')
+          || hasPermission('payroll.manage')
+        );
+
+      allow create, update: if hasPermission('payroll.manage');
+      allow delete: if systemOwner();
+    }
+
+    match /expenses/{expenseId} {
+      allow read: if hasPermission('finance.read')
+        || hasPermission('finance.manage');
+
+      allow create, update: if hasPermission('finance.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /financialAudits/{auditId} {
+      allow read: if hasPermission('finance.audit')
+        || systemAdministrator();
+      allow create: if hasPermission('finance.audit');
+      allow update, delete: if false;
+    }
+
+    // ============================================================
+    // INVENTORY
+    // ============================================================
+
+    match /inventoryItems/{itemId} {
+      allow read: if active();
+      allow create, update: if hasPermission('inventory.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /inventoryAssignments/{assignmentId} {
+      allow read: if active();
+      allow create, update: if hasPermission('inventory.manage');
+      allow delete: if systemAdministrator();
+    }
+
+    match /inventoryTransactions/{transactionId} {
+      allow read: if active();
+      allow create: if hasPermission('inventory.manage');
+      allow update, delete: if false;
+    }
+
+    // ============================================================
+    // SYSTEM SETTINGS
+    // ============================================================
+
+    match /systemSettings/{settingId} {
+      allow read: if active();
+      allow create, update: if systemAdministrator();
+      allow delete: if systemOwner();
+    }
+
+    match /featureFlags/{flagId} {
+      allow read: if active();
+      allow create, update: if systemAdministrator();
+      allow delete: if systemOwner();
+    }
+
+    match /maintenanceNotices/{noticeId} {
+      allow read: if true;
+      allow create, update: if systemAdministrator();
+      allow delete: if systemOwner();
+    }
+
+    // ============================================================
+    // DEFAULT DENY
+    // ============================================================
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
 }
