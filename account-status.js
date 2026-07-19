@@ -25,44 +25,119 @@ async function loadCurrentAccount() {
   return currentAccount;
 }
 
+function closeAccountStatusModal() {
+  document.getElementById('accountStatusModal')?.remove();
+  document.documentElement.classList.remove('account-status-modal-open');
+}
+
+function openDeactivationModal(uid, displayName) {
+  closeAccountStatusModal();
+  document.documentElement.classList.add('account-status-modal-open');
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="account-status-backdrop" id="accountStatusModal" role="dialog" aria-modal="true" aria-labelledby="accountStatusModalTitle">
+      <section class="account-status-modal">
+        <div class="account-status-modal-heading">
+          <div>
+            <p>PORTAL ACCESS CONTROL</p>
+            <h2 id="accountStatusModalTitle">Deactivate account</h2>
+          </div>
+          <button type="button" class="account-status-close" id="cancelAccountStatusModal" aria-label="Close">×</button>
+        </div>
+        <div class="account-status-subject">
+          <span>Account</span>
+          <strong>${esc(displayName)}</strong>
+        </div>
+        <form id="deactivateAccountForm" class="account-status-form">
+          <label>
+            Reason for deactivation <span aria-hidden="true">*</span>
+            <textarea name="reason" minlength="10" maxlength="1000" required placeholder="Explain why this portal account is being deactivated."></textarea>
+            <small>This reason will be shown to the account holder and included with any appeal.</small>
+          </label>
+          <label>
+            Internal administrative notes
+            <textarea name="notes" maxlength="1500" placeholder="Optional notes for administrators. These are not shown to the account holder."></textarea>
+          </label>
+          <div class="account-status-warning">
+            <strong>Immediate access removal</strong>
+            <p>The account holder will be blocked from the portal as soon as this action is completed.</p>
+          </div>
+          <div class="account-status-modal-actions">
+            <button type="button" class="secondary" id="cancelDeactivateAccount">Cancel</button>
+            <button type="submit" class="danger">Deactivate account</button>
+          </div>
+        </form>
+      </section>
+    </div>`);
+
+  const form = document.getElementById('deactivateAccountForm');
+  const cancel = () => closeAccountStatusModal();
+  document.getElementById('cancelAccountStatusModal').onclick = cancel;
+  document.getElementById('cancelDeactivateAccount').onclick = cancel;
+
+  form.onsubmit = async event => {
+    event.preventDefault();
+    const submit = form.querySelector('[type="submit"]');
+    const data = new FormData(form);
+    const reason = String(data.get('reason') || '').trim();
+    const notes = String(data.get('notes') || '').trim();
+
+    if (!reason) {
+      form.querySelector('[name="reason"]').focus();
+      return;
+    }
+
+    submit.disabled = true;
+    submit.textContent = 'Deactivating…';
+
+    try {
+      await updateDoc(doc(db, 'portalAccounts', uid), {
+        portalStatus: 'DEACTIVATED',
+        statusChangedAt: serverTimestamp(),
+        statusChangedBy: auth.currentUser.uid,
+        statusChangedByName: currentAccount?.displayName || currentAccount?.portalUsername || 'System Administrator',
+        deactivationReason: reason,
+        deactivationNotes: notes,
+        deactivatedAt: serverTimestamp(),
+        deactivatedBy: auth.currentUser.uid,
+        deactivatedByName: currentAccount?.displayName || currentAccount?.portalUsername || 'System Administrator',
+      });
+      closeAccountStatusModal();
+      window.dispatchEvent(new CustomEvent('canela-account-status-changed'));
+      renderAccountStatus(true);
+    } catch (error) {
+      console.error(error);
+      submit.disabled = false;
+      submit.textContent = 'Deactivate account';
+      const existing = form.querySelector('.account-status-error');
+      existing?.remove();
+      form.insertAdjacentHTML('afterbegin', `<div class="account-status-error">Unable to deactivate account: ${esc(error.code || error.message)}</div>`);
+    }
+  };
+}
+
 async function setAccountStatus(uid, nextStatus, displayName) {
   if (uid === auth.currentUser.uid && nextStatus !== 'ACTIVE') {
     alert('You cannot disable your own account while signed in.');
     return;
   }
 
-  let deactivationReason = '';
   if (nextStatus !== 'ACTIVE') {
-    deactivationReason = String(prompt(`Enter the reason for deactivating ${displayName}'s portal account:`) || '').trim();
-    if (!deactivationReason) {
-      alert('A deactivation reason is required.');
-      return;
-    }
+    openDeactivationModal(uid, displayName);
+    return;
   }
 
-  const action = nextStatus === 'ACTIVE' ? 're-enable' : 'deactivate';
-  if (!confirm(`${action === 'deactivate' ? 'Deactivate' : 'Re-enable'} ${displayName}'s portal account?`)) return;
+  if (!confirm(`Re-enable ${displayName}'s portal account?`)) return;
 
   try {
-    const update = {
-      portalStatus: nextStatus,
+    await updateDoc(doc(db, 'portalAccounts', uid), {
+      portalStatus: 'ACTIVE',
       statusChangedAt: serverTimestamp(),
       statusChangedBy: auth.currentUser.uid,
       statusChangedByName: currentAccount?.displayName || currentAccount?.portalUsername || 'System Administrator',
-    };
-
-    if (nextStatus === 'ACTIVE') {
-      update.reactivatedAt = serverTimestamp();
-      update.reactivatedBy = auth.currentUser.uid;
-      update.reactivatedByName = currentAccount?.displayName || currentAccount?.portalUsername || 'System Administrator';
-    } else {
-      update.deactivationReason = deactivationReason;
-      update.deactivatedAt = serverTimestamp();
-      update.deactivatedBy = auth.currentUser.uid;
-      update.deactivatedByName = currentAccount?.displayName || currentAccount?.portalUsername || 'System Administrator';
-    }
-
-    await updateDoc(doc(db, 'portalAccounts', uid), update);
+      reactivatedAt: serverTimestamp(),
+      reactivatedBy: auth.currentUser.uid,
+      reactivatedByName: currentAccount?.displayName || currentAccount?.portalUsername || 'System Administrator',
+    });
     window.dispatchEvent(new CustomEvent('canela-account-status-changed'));
     renderAccountStatus(true);
   } catch (error) {
