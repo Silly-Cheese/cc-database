@@ -6,6 +6,8 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
+  where,
   updateDoc,
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
@@ -42,10 +44,13 @@ function reference(appeal) {
 }
 
 async function loadAppeals() {
-  const snapshot = await getDocs(collection(db, 'deactivationAppeals'));
+  const appealsRef = collection(db, 'deactivationAppeals');
+  const source = canReview()
+    ? appealsRef
+    : query(appealsRef, where('accountUid', '==', auth.currentUser.uid));
+  const snapshot = await getDocs(source);
   appeals = snapshot.docs
     .map(item => ({ id: item.id, ...item.data() }))
-    .filter(item => canReview() || item.accountUid === auth.currentUser?.uid)
     .sort((a, b) => (b.submittedAt?.seconds || 0) - (a.submittedAt?.seconds || 0));
 }
 

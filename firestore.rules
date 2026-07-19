@@ -52,6 +52,35 @@ systemAdministrator()
 || permission in account().permissions
 );
 }
+
+function performanceCenterAccess() {
+return hasPermission('performance.access')
+|| hasPermission('performance.review.create')
+|| hasPermission('performance.review.self_complete')
+|| hasPermission('performance.review.evaluate')
+|| hasPermission('performance.review.approve')
+|| hasPermission('performance.review.finalize')
+|| hasPermission('performance.review.reopen')
+|| hasPermission('performance.review.view_assigned')
+|| hasPermission('performance.review.view_all')
+|| hasPermission('performance.review.manage_templates')
+|| hasPermission('performance.review.manage_workflows')
+|| hasPermission('performance.review.manage')
+|| hasPermission('performance.notes.private')
+|| hasPermission('performance.reports.view')
+|| hasPermission('performance.reports.export');
+}
+
+function performanceDirectoryAccess() {
+return hasPermission('performance.review.create')
+|| hasPermission('performance.review.evaluate')
+|| hasPermission('performance.review.approve')
+|| hasPermission('performance.review.finalize')
+|| hasPermission('performance.review.view_all')
+|| hasPermission('performance.review.manage_templates')
+|| hasPermission('performance.review.manage_workflows')
+|| hasPermission('performance.review.manage');
+}
 function onlyChanges(fields) {
 return request.resource.data
 .diff(resource.data)
@@ -143,13 +172,28 @@ return isSelf(uid)
 }
 match /portalAccounts/{uid} {
 allow get: if isSelf(uid) || systemAdministrator();
-allow list: if systemAdministrator();
+allow list: if systemAdministrator()
+|| performanceDirectoryAccess();
 allow create: if validBootstrapAccount(uid)
 || validActivatedAccount(uid);
-allow update: if systemAdministrator()
+allow update: if (
+systemAdministrator()
 && (
 !('SYSTEM_OWNER' in resource.data.systemRoles)
 || systemOwner()
+)
+) || (
+hasPermission('appeals.review')
+&& onlyChanges([
+'portalStatus',
+'reactivatedAt',
+'reactivatedBy',
+'reactivatedByName',
+'statusChangedAt',
+'statusChangedBy'
+])
+&& resource.data.portalStatus == 'DISABLED'
+&& request.resource.data.portalStatus == 'ACTIVE'
 );
 allow delete: if systemOwner()
 && request.auth.uid != uid;
@@ -527,15 +571,50 @@ allow delete: if systemAdministrator();
 }
 match /reviewTemplates/{templateId} {
 allow read: if active();
-allow create, update: if hasPermission('reviews.manage');
-allow delete: if systemAdministrator();
+allow create, update: if hasPermission('reviews.manage')
+|| hasPermission('performance.review.manage_templates')
+|| hasPermission('performance.review.manage');
+allow delete: if systemAdministrator()
+|| hasPermission('performance.review.manage');
 }
+
+match /performanceTemplates/{templateId} {
+allow read: if performanceCenterAccess();
+allow create, update: if hasPermission('performance.review.manage_templates')
+|| hasPermission('performance.review.manage');
+allow delete: if systemAdministrator()
+|| hasPermission('performance.review.delete')
+|| hasPermission('performance.review.manage');
+}
+
+match /performanceWorkflows/{workflowId} {
+allow read: if performanceCenterAccess();
+allow create, update: if hasPermission('performance.review.manage_workflows')
+|| hasPermission('performance.review.manage');
+allow delete: if systemAdministrator()
+|| hasPermission('performance.review.delete')
+|| hasPermission('performance.review.manage');
+}
+
 match /performanceReviews/{reviewId} {
-allow read: if active();
-allow create: if hasPermission('reviews.submit');
-allow update: if hasPermission('reviews.approve')
+allow read: if performanceCenterAccess()
+|| hasPermission('reviews.submit')
+|| hasPermission('reviews.approve')
 || hasPermission('reviews.manage');
-allow delete: if systemAdministrator();
+allow create: if hasPermission('performance.review.create')
+|| hasPermission('performance.review.manage')
+|| hasPermission('reviews.submit');
+allow update: if hasPermission('performance.review.self_complete')
+|| hasPermission('performance.review.evaluate')
+|| hasPermission('performance.review.approve')
+|| hasPermission('performance.review.finalize')
+|| hasPermission('performance.review.reopen')
+|| hasPermission('performance.review.manage')
+|| hasPermission('reviews.approve')
+|| hasPermission('reviews.manage');
+allow delete: if systemAdministrator()
+|| hasPermission('performance.review.delete')
+|| hasPermission('performance.review.manage');
 }
 match /goalAssignments/{goalId} {
 allow read: if active();
