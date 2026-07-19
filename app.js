@@ -354,11 +354,11 @@ onAuthStateChanged(auth, async user => {
       }
       return;
     }
-    if (snapshot.data().portalStatus !== 'ACTIVE') {
-      await signOut(auth);
+    account = snapshot.data();
+    if (account.portalStatus !== 'ACTIVE') {
+      root.innerHTML = '<div class="loading-screen"><div class="brand-mark">CC</div><h1>Canela Portal</h1><p>Account access restricted.</p></div>';
       return;
     }
-    account = snapshot.data();
     renderPortal();
   } catch {
     authPage('The portal could not verify your account.');
