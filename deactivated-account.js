@@ -6,15 +6,16 @@ import {
   addDoc,
   doc,
   getDoc,
-  getDocs,
   query,
   where,
+  onSnapshot,
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
 
 const auth = getAuth(getApp());
 const db = getFirestore(getApp());
 let handling = false;
+let stopAppealWatcher = null;
 
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, character => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
@@ -26,13 +27,50 @@ function formatDate(value) {
   return Number.isNaN(date.getTime()) ? 'Not recorded' : date.toLocaleString();
 }
 
-async function getPendingAppeal(uid) {
-  const snapshot = await getDocs(query(
-    collection(db, 'deactivationAppeals'),
-    where('accountUid', '==', uid),
-    where('status', '==', 'PENDING'),
-  ));
-  return snapshot.empty ? null : { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+function latestAppeal(snapshot) {
+  if (snapshot.empty) return null;
+  return snapshot.docs
+    .map(item => ({ id: item.id, ...item.data() }))
+    .sort((a, b) => {
+      const aTime = a.updatedAt?.seconds || a.submittedAt?.seconds || 0;
+      const bTime = b.updatedAt?.seconds || b.submittedAt?.seconds || 0;
+      return bTime - aTime;
+    })[0];
+}
+
+function appealStatusDetails(appeal) {
+  const status = String(appeal?.status || 'PENDING').toUpperCase();
+  const details = {
+    PENDING: {
+      label: 'Pending Review',
+      className: 'pending',
+      message: 'Your appeal has been received and is waiting for an authorized reviewer.',
+    },
+    NEEDS_INFORMATION: {
+      label: 'More Information Requested',
+      className: 'needs-information',
+      message: 'A reviewer needs additional information before a decision can be made.',
+    },
+    APPROVED: {
+      label: 'Approved',
+      className: 'approved',
+      message: 'Your appeal was approved. Portal access should be restored shortly.',
+    },
+    DENIED: {
+      label: 'Denied',
+      className: 'denied',
+      message: 'Your appeal was reviewed and denied. Review the decision notes below.',
+    },
+  };
+  return details[status] || {
+    label: status.replaceAll('_', ' '),
+    className: 'pending',
+    message: 'Your appeal status has been updated.',
+  };
+}
+
+function reference(appeal) {
+  return appeal?.appealId || (appeal?.id ? `APL-${appeal.id.slice(0, 8).toUpperCase()}` : 'Not assigned');
 }
 
 function modalShell(content) {
@@ -46,13 +84,42 @@ function modalShell(content) {
 
 function bindSignOut() {
   document.getElementById('signOutDeactivated')?.addEventListener('click', async () => {
+    stopAppealWatcher?.();
+    stopAppealWatcher = null;
     document.documentElement.classList.remove('deactivated-account-open');
     document.getElementById('deactivatedAccountModal')?.remove();
     await signOut(auth);
   });
 }
 
-function showDeactivatedModal(account, pendingAppeal = null, message = '') {
+function appealStatusCard(appeal) {
+  if (!appeal) return '';
+  const status = appealStatusDetails(appeal);
+  const notes = appeal.decisionReason || appeal.reviewNotes || '';
+  const updated = appeal.reviewedAt || appeal.updatedAt || appeal.submittedAt;
+  return `
+    <div class="deactivation-appeal-status ${status.className}">
+      <div class="appeal-status-heading">
+        <div>
+          <span>APPEAL STATUS</span>
+          <strong>${esc(status.label)}</strong>
+        </div>
+        <b>${esc(reference(appeal))}</b>
+      </div>
+      <p>${esc(status.message)}</p>
+      <div class="appeal-status-meta">
+        <div><span>Submitted</span><strong>${esc(formatDate(appeal.submittedAt))}</strong></div>
+        <div><span>Last updated</span><strong>${esc(formatDate(updated))}</strong></div>
+      </div>
+      ${appeal.assignedReviewerName ? `<div class="appeal-status-note"><span>Assigned reviewer</span><p>${esc(appeal.assignedReviewerName)}</p></div>` : ''}
+      ${notes ? `<div class="appeal-status-note"><span>Reviewer notes</span><p>${esc(notes)}</p></div>` : ''}
+    </div>`;
+}
+
+function showDeactivatedModal(account, appeal = null, message = '') {
+  const appealStatus = String(appeal?.status || '').toUpperCase();
+  const canSubmit = !appeal || appealStatus === 'DENIED';
+
   modalShell(`
     <div class="brand-mark large">CC</div>
     <p class="deactivated-eyebrow">ACCOUNT ACCESS NOTICE</p>
@@ -65,19 +132,15 @@ function showDeactivatedModal(account, pendingAppeal = null, message = '') {
       ${account.deactivatedByName ? `<div class="full"><span>Deactivated by</span><strong>${esc(account.deactivatedByName)}</strong></div>` : ''}
     </div>
     ${message ? `<div class="alert">${esc(message)}</div>` : ''}
-    ${pendingAppeal ? `
-      <div class="deactivation-appeal-status">
-        <strong>Appeal pending review</strong>
-        <p>Your appeal has been received. You will regain access only if an authorized reviewer approves it.</p>
-      </div>` : `
-      <button type="button" id="appealDeactivation" class="deactivation-primary">Appeal Deactivation</button>`}
+    ${appealStatusCard(appeal)}
+    ${canSubmit ? `<button type="button" id="appealDeactivation" class="deactivation-primary">${appeal ? 'Submit New Appeal' : 'Appeal Deactivation'}</button>` : ''}
     <button type="button" id="signOutDeactivated" class="deactivation-secondary">Sign Out</button>`);
 
   bindSignOut();
-  document.getElementById('appealDeactivation')?.addEventListener('click', () => showAppealForm(account));
+  document.getElementById('appealDeactivation')?.addEventListener('click', () => showAppealForm(account, appeal));
 }
 
-function showAppealForm(account, errorMessage = '') {
+function showAppealForm(account, previousAppeal = null, errorMessage = '') {
   modalShell(`
     <div class="deactivated-modal-heading">
       <div><p class="deactivated-eyebrow">ACCOUNT ACCESS APPEAL</p><h1 id="deactivatedAccountTitle">Appeal Deactivation</h1></div>
@@ -103,7 +166,7 @@ function showAppealForm(account, errorMessage = '') {
       </div>
     </form>`);
 
-  document.getElementById('backToDeactivation').onclick = () => showDeactivatedModal(account);
+  document.getElementById('backToDeactivation').onclick = () => showDeactivatedModal(account, previousAppeal);
   document.getElementById('deactivationAppealForm').onsubmit = async event => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -131,7 +194,7 @@ function showAppealForm(account, errorMessage = '') {
       showAppealSubmitted(documentRef.id);
     } catch (error) {
       console.error(error);
-      showAppealForm(account, `Unable to submit appeal: ${error.code || error.message}`);
+      showAppealForm(account, previousAppeal, `Unable to submit appeal: ${error.code || error.message}`);
     }
   };
 }
@@ -141,7 +204,7 @@ function showAppealSubmitted(referenceId) {
     <div class="brand-mark large">CC</div>
     <p class="deactivated-eyebrow">APPEAL CENTER</p>
     <h1 id="deactivatedAccountTitle">Appeal Submitted</h1>
-    <p class="deactivated-summary">Your appeal has been received and is awaiting administrative review.</p>
+    <p class="deactivated-summary">Your appeal has been received and is awaiting administrative review. This screen will update automatically when its status changes.</p>
     <div class="deactivation-details">
       <div><span>Status</span><strong>Pending Review</strong></div>
       <div><span>Reference</span><strong>${esc(referenceId)}</strong></div>
@@ -158,12 +221,16 @@ document.addEventListener('keydown', event => {
 }, true);
 
 onAuthStateChanged(auth, async user => {
+  stopAppealWatcher?.();
+  stopAppealWatcher = null;
   if (handling || !user || user.isAnonymous) return;
+
   try {
     const snapshot = await getDoc(doc(db, 'portalAccounts', user.uid));
     if (!snapshot.exists()) return;
     const account = snapshot.data();
     const status = String(account.portalStatus || '').trim().toUpperCase();
+
     if (status === 'ACTIVE') {
       document.documentElement.classList.remove('deactivated-account-open');
       document.getElementById('deactivatedAccountModal')?.remove();
@@ -171,9 +238,17 @@ onAuthStateChanged(auth, async user => {
     }
 
     handling = true;
-    let pending = null;
-    try { pending = await getPendingAppeal(user.uid); } catch (error) { console.warn('Unable to check appeal status.', error); }
-    showDeactivatedModal(account, pending);
+    const appealsQuery = query(
+      collection(db, 'deactivationAppeals'),
+      where('accountUid', '==', user.uid),
+    );
+
+    stopAppealWatcher = onSnapshot(appealsQuery, appealSnapshot => {
+      showDeactivatedModal(account, latestAppeal(appealSnapshot));
+    }, error => {
+      console.warn('Unable to watch appeal status.', error);
+      showDeactivatedModal(account, null, `Unable to load appeal status: ${error.code || error.message}`);
+    });
   } catch (error) {
     console.error('Unable to verify account activation status.', error);
   } finally {
