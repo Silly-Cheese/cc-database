@@ -31,15 +31,38 @@ async function setAccountStatus(uid, nextStatus, displayName) {
     return;
   }
 
-  const action = nextStatus === 'ACTIVE' ? 're-enable' : 'disable';
-  if (!confirm(`${action === 'disable' ? 'Disable' : 'Re-enable'} ${displayName}'s portal account?`)) return;
+  let deactivationReason = '';
+  if (nextStatus !== 'ACTIVE') {
+    deactivationReason = String(prompt(`Enter the reason for deactivating ${displayName}'s portal account:`) || '').trim();
+    if (!deactivationReason) {
+      alert('A deactivation reason is required.');
+      return;
+    }
+  }
+
+  const action = nextStatus === 'ACTIVE' ? 're-enable' : 'deactivate';
+  if (!confirm(`${action === 'deactivate' ? 'Deactivate' : 'Re-enable'} ${displayName}'s portal account?`)) return;
 
   try {
-    await updateDoc(doc(db, 'portalAccounts', uid), {
+    const update = {
       portalStatus: nextStatus,
       statusChangedAt: serverTimestamp(),
       statusChangedBy: auth.currentUser.uid,
-    });
+      statusChangedByName: currentAccount?.displayName || currentAccount?.portalUsername || 'System Administrator',
+    };
+
+    if (nextStatus === 'ACTIVE') {
+      update.reactivatedAt = serverTimestamp();
+      update.reactivatedBy = auth.currentUser.uid;
+      update.reactivatedByName = currentAccount?.displayName || currentAccount?.portalUsername || 'System Administrator';
+    } else {
+      update.deactivationReason = deactivationReason;
+      update.deactivatedAt = serverTimestamp();
+      update.deactivatedBy = auth.currentUser.uid;
+      update.deactivatedByName = currentAccount?.displayName || currentAccount?.portalUsername || 'System Administrator';
+    }
+
+    await updateDoc(doc(db, 'portalAccounts', uid), update);
     window.dispatchEvent(new CustomEvent('canela-account-status-changed'));
     renderAccountStatus(true);
   } catch (error) {
@@ -75,7 +98,7 @@ async function renderAccountStatus(force = false) {
           <div><p>LOGIN ACCESS</p><h2>Portal account access</h2></div>
           <span>${accounts.filter(item => item.portalStatus === 'ACTIVE').length} active</span>
         </div>
-        <p class="account-help">Click Edit account to change the person’s organizational rank, system role, permissions, linked staff profile, display name, or access status. Redeemed authorization codes remain locked.</p>
+        <p class="account-help">Deactivating an account requires a reason. That reason is shown to the user and may be appealed.</p>
         <div class="account-access-grid">
           ${accounts.map(item => {
             const active = item.portalStatus === 'ACTIVE';
@@ -83,15 +106,16 @@ async function renderAccountStatus(force = false) {
             return `
               <article class="account-access-card ${active ? 'is-enabled' : 'is-disabled'}">
                 <div>
-                  <span class="account-access-status">${active ? 'ACTIVE' : esc(item.portalStatus || 'DISABLED')}</span>
+                  <span class="account-access-status">${active ? 'ACTIVE' : esc(item.portalStatus || 'DEACTIVATED')}</span>
                   <h3>${esc(item.displayName || item.portalUsername || 'Unnamed account')}</h3>
                   <p>@${esc(item.portalUsername || 'unknown')} · ${esc(item.organizationalRank || 'Staff')}</p>
+                  ${!active && item.deactivationReason ? `<p><strong>Reason:</strong> ${esc(item.deactivationReason)}</p>` : ''}
                 </div>
                 <div class="account-access-actions">
                   <button class="account-edit" data-uid="${item.id}">Edit account</button>
                   ${item.id === auth.currentUser.uid || protectedOwner
                     ? '<span class="account-protected">Protected</span>'
-                    : `<button class="account-toggle" data-uid="${item.id}" data-name="${esc(item.displayName || item.portalUsername || 'this account')}" data-next="${active ? 'DISABLED' : 'ACTIVE'}">${active ? 'Disable account' : 'Re-enable account'}</button>`}
+                    : `<button class="account-toggle" data-uid="${item.id}" data-name="${esc(item.displayName || item.portalUsername || 'this account')}" data-next="${active ? 'DEACTIVATED' : 'ACTIVE'}">${active ? 'Deactivate account' : 'Re-enable account'}</button>`}
                 </div>
               </article>`;
           }).join('')}
