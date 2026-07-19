@@ -1,0 +1,35 @@
+name: Apply Firestore permission fix
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-firestore-permission-fix.yml'
+      - 'scripts/fix-firestore-permissions.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply rules and Appeal Center fixes
+        run: python scripts/fix-firestore-permissions.py
+
+      - name: Commit repaired files
+        run: |
+          if git diff --quiet -- firestore.rules appeal-center.js; then
+            echo 'No changes were required.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add firestore.rules appeal-center.js
+          git commit -m 'Fix Performance Center and Appeal Center permissions'
+          git push
