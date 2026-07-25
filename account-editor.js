@@ -62,6 +62,16 @@ const PERMISSION_GROUPS = [
     ['performance.reports.view', 'View performance reports and analytics'],
     ['performance.reports.export', 'Export performance reports and records'],
   ]],
+  ['Internship Center', [
+    ['internships.access', 'Open the Internship Center'],
+    ['internships.participate', 'Participate as an intern'],
+    ['internships.supervise', 'Supervise assigned interns'],
+    ['internships.assign', 'Enroll interns and assign work'],
+    ['internships.manage_programs', 'Create and manage internship programs'],
+    ['internships.manage_people', 'Manage internship records and outcomes'],
+    ['internships.view_reports', 'View internship reports and analytics'],
+    ['internships.manage', 'Fully administer the Internship Center'],
+  ]],
   ['Documents', [
     ['documents.manage', 'Manage policies and documents'],
   ]],
