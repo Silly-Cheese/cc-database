@@ -90,6 +90,19 @@ const PERMISSION_GROUPS = [
     ],
   },
   {
+    title: 'Internship Center',
+    permissions: [
+      ['internships.access', 'Open the Internship Center'],
+      ['internships.participate', 'Participate as an intern'],
+      ['internships.supervise', 'Supervise assigned interns'],
+      ['internships.assign', 'Enroll interns and assign work'],
+      ['internships.manage_programs', 'Create and manage internship programs'],
+      ['internships.manage_people', 'Manage internship records and outcomes'],
+      ['internships.view_reports', 'View internship reports and analytics'],
+      ['internships.manage', 'Fully administer the Internship Center'],
+    ],
+  },
+  {
     title: 'Documents',
     permissions: [
       ['documents.manage', 'Manage policies and documents'],
