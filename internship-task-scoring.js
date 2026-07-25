@@ -105,11 +105,17 @@ async function configureReviewScore(modal) {
     scoreInput.min = '0';
     scoreInput.max = String(maxPoints);
     scoreInput.step = '0.01';
-    scoreInput.placeholder = `0–${maxPoints}`;
-    scoreField.insertAdjacentHTML('beforeend', `<small>Enter an optional score out of ${esc(maxPoints)} points.</small>`);
+    scoreInput.placeholder = 'Enter score';
+
+    const scoreWrap = document.createElement('div');
+    scoreWrap.className = 'internship-score-input-wrap';
+    scoreInput.parentNode.insertBefore(scoreWrap, scoreInput);
+    scoreWrap.appendChild(scoreInput);
+    scoreWrap.insertAdjacentHTML('beforeend', `<span class="internship-score-max">out of <strong>${esc(maxPoints)}</strong> points</span>`);
+    scoreField.insertAdjacentHTML('beforeend', `<small>Optional. Enter a score from 0 to ${esc(maxPoints)}.</small>`);
 
     const summary = modal.querySelector('.internship-modal-summary');
-    summary?.insertAdjacentHTML('beforeend', `<div class="internship-review-max-points"><span>Maximum points</span><strong>${esc(maxPoints)}</strong></div>`);
+    summary?.insertAdjacentHTML('beforeend', `<div class="internship-review-max-points"><span>Task value</span><strong>${esc(maxPoints)} points</strong></div>`);
   } catch (error) {
     console.warn('Unable to configure task score.', error);
   }
