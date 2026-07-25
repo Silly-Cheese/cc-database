@@ -6,6 +6,7 @@ const auth = getAuth(getApp());
 const db = getFirestore(getApp());
 let account = null;
 let taskData = null;
+let taskFilters = { search: '', status: 'ALL', priority: 'ALL', intern: 'ALL', program: 'ALL', due: 'ALL' };
 
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, character => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
@@ -186,6 +187,91 @@ function taskCard(task) {
   </article>`;
 }
 
+function dueBucket(task) {
+  if (!task.dueDate) return 'NO_DATE';
+  const due = task.dueDate?.toDate ? task.dueDate.toDate() : new Date(task.dueDate);
+  if (Number.isNaN(due.getTime())) return 'NO_DATE';
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+  const diff = Math.round((dueDay - today) / 86400000);
+  if (diff < 0) return 'OVERDUE';
+  if (diff === 0) return 'TODAY';
+  if (diff <= 7) return 'NEXT_7_DAYS';
+  return 'LATER';
+}
+
+function filteredTasks(tasks) {
+  const search = taskFilters.search.trim().toLowerCase();
+  return tasks.filter(task => {
+    const haystack = [task.title, task.description, task.internName, task.programTitle, task.phase, task.supervisorName].join(' ').toLowerCase();
+    return (!search || haystack.includes(search))
+      && (taskFilters.status === 'ALL' || String(task.status || 'NOT_STARTED') === taskFilters.status)
+      && (taskFilters.priority === 'ALL' || String(task.priority || 'NORMAL') === taskFilters.priority)
+      && (taskFilters.intern === 'ALL' || String(task.internUid || '') === taskFilters.intern)
+      && (taskFilters.program === 'ALL' || String(task.programId || '') === taskFilters.program)
+      && (taskFilters.due === 'ALL' || dueBucket(task) === taskFilters.due);
+  });
+}
+
+function optionList(items, valueKey, labelKey) {
+  const unique = new Map();
+  items.forEach(item => {
+    const value = item[valueKey];
+    const label = item[labelKey];
+    if (value && label && !unique.has(value)) unique.set(value, label);
+  });
+  return [...unique.entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
+}
+
+function renderFilterControls(tasks) {
+  const interns = optionList(tasks, 'internUid', 'internName');
+  const programs = optionList(tasks, 'programId', 'programTitle');
+  return `<div class="internship-task-filters">
+    <label class="internship-task-search"><span>Search tasks</span><input id="taskFilterSearch" type="search" value="${esc(taskFilters.search)}" placeholder="Search title, intern, program, phase…"></label>
+    <label><span>Status</span><select id="taskFilterStatus"><option value="ALL">All statuses</option>${['NOT_STARTED','IN_PROGRESS','SUBMITTED','CHANGES_REQUESTED','APPROVED','REJECTED','WAIVED'].map(value => `<option value="${value}" ${taskFilters.status === value ? 'selected' : ''}>${esc(statusLabel(value))}</option>`).join('')}</select></label>
+    <label><span>Priority</span><select id="taskFilterPriority"><option value="ALL">All priorities</option>${['LOW','NORMAL','HIGH','URGENT'].map(value => `<option value="${value}" ${taskFilters.priority === value ? 'selected' : ''}>${esc(value)}</option>`).join('')}</select></label>
+    <label><span>Intern</span><select id="taskFilterIntern"><option value="ALL">All interns</option>${interns.map(([value,label]) => `<option value="${esc(value)}" ${taskFilters.intern === value ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label>
+    <label><span>Program</span><select id="taskFilterProgram"><option value="ALL">All programs</option>${programs.map(([value,label]) => `<option value="${esc(value)}" ${taskFilters.program === value ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label>
+    <label><span>Due date</span><select id="taskFilterDue"><option value="ALL">Any due date</option><option value="OVERDUE" ${taskFilters.due === 'OVERDUE' ? 'selected' : ''}>Overdue</option><option value="TODAY" ${taskFilters.due === 'TODAY' ? 'selected' : ''}>Due today</option><option value="NEXT_7_DAYS" ${taskFilters.due === 'NEXT_7_DAYS' ? 'selected' : ''}>Next 7 days</option><option value="LATER" ${taskFilters.due === 'LATER' ? 'selected' : ''}>Later</option><option value="NO_DATE" ${taskFilters.due === 'NO_DATE' ? 'selected' : ''}>No due date</option></select></label>
+    <button type="button" class="internship-task-clear" id="taskFilterClear">Clear filters</button>
+  </div>`;
+}
+
+function bindFilterControls(allTasks) {
+  const apply = () => {
+    taskFilters = {
+      search: document.getElementById('taskFilterSearch')?.value || '',
+      status: document.getElementById('taskFilterStatus')?.value || 'ALL',
+      priority: document.getElementById('taskFilterPriority')?.value || 'ALL',
+      intern: document.getElementById('taskFilterIntern')?.value || 'ALL',
+      program: document.getElementById('taskFilterProgram')?.value || 'ALL',
+      due: document.getElementById('taskFilterDue')?.value || 'ALL'
+    };
+    renderFilteredGrid(allTasks);
+  };
+  let timer;
+  document.getElementById('taskFilterSearch')?.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(apply, 140);
+  });
+  ['taskFilterStatus','taskFilterPriority','taskFilterIntern','taskFilterProgram','taskFilterDue'].forEach(id => document.getElementById(id)?.addEventListener('change', apply));
+  document.getElementById('taskFilterClear')?.addEventListener('click', () => {
+    taskFilters = { search: '', status: 'ALL', priority: 'ALL', intern: 'ALL', program: 'ALL', due: 'ALL' };
+    renderTaskWorkspace(false);
+  });
+}
+
+function renderFilteredGrid(allTasks) {
+  const results = filteredTasks(allTasks);
+  const grid = document.getElementById('internshipTaskGrid');
+  const count = document.getElementById('internshipTaskResultCount');
+  if (count) count.textContent = `${results.length} of ${allTasks.length} tasks shown`;
+  if (!grid) return;
+  grid.innerHTML = results.map(taskCard).join('') || '<div class="internship-empty">No tasks match the selected filters.</div>';
+  document.querySelectorAll('.internship-edit-task').forEach(button => button.addEventListener('click', () => openTaskModal(taskData.tasks.find(task => task.id === button.dataset.taskId))));
+}
+
 async function renderTaskWorkspace(force = false) {
   const view = document.querySelector('.internship-view');
   if (!view) return;
@@ -198,10 +284,13 @@ async function renderTaskWorkspace(force = false) {
     view.innerHTML = `<section class="internship-section internship-task-workspace">
       <div class="internship-section-head"><div><p>ASSIGNMENTS</p><h2>Internship task management</h2><span class="internship-section-subtitle">Create, assign, schedule, and monitor work for every active intern.</span></div>${canAssign() ? '<button class="internship-btn" id="internshipNewTask">+ Create task</button>' : ''}</div>
       <div class="internship-task-toolbar"><span><strong>${visibleTasks.length}</strong>Total tasks</span><span><strong>${openCount}</strong>Open</span><span><strong>${visibleTasks.filter(task => task.status === 'SUBMITTED').length}</strong>Submitted</span><span><strong>${visibleTasks.filter(task => task.status === 'APPROVED').length}</strong>Approved</span></div>
-      <div class="internship-grid">${visibleTasks.map(taskCard).join('') || '<div class="internship-empty">No internship tasks exist yet. Create the first task for an enrolled intern.</div>'}</div>
+      ${renderFilterControls(visibleTasks)}
+      <div class="internship-task-filter-summary"><span id="internshipTaskResultCount">${filteredTasks(visibleTasks).length} of ${visibleTasks.length} tasks shown</span></div>
+      <div class="internship-grid" id="internshipTaskGrid">${filteredTasks(visibleTasks).map(taskCard).join('') || '<div class="internship-empty">No tasks match the selected filters.</div>'}</div>
     </section>`;
     document.getElementById('internshipNewTask')?.addEventListener('click', () => openTaskModal());
     document.querySelectorAll('.internship-edit-task').forEach(button => button.addEventListener('click', () => openTaskModal(data.tasks.find(task => task.id === button.dataset.taskId))));
+    bindFilterControls(visibleTasks);
   } catch (error) {
     console.error(error);
     view.innerHTML = `<div class="internship-empty">Unable to load internship tasks: ${esc(error?.message || 'Unknown error')}</div>`;
