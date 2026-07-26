@@ -1,10 +1,12 @@
 import { getApp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js';
 import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js';
-import { getFirestore, collection, addDoc, doc, getDoc, getDocs, query, where, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
+import { getFirestore, collection, addDoc, doc, getDocs, onSnapshot, query, where, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js';
 
 const auth = getAuth(getApp());
 const db = getFirestore(getApp());
-let checking = false;
+let stopAccountWatcher = null;
+let evaluationToken = 0;
+let dateTimer = null;
 
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const toDate = value => value?.toDate ? value.toDate() : new Date(value);
@@ -27,15 +29,20 @@ async function endedEarly(uid, account) {
   );
   const snapshot = await getDocs(events);
   const loaStart = timestampMs(account.loaStartDate || account.loaUpdatedAt);
-  return snapshot.docs.some(item => {
-    const data = item.data();
-    return timestampMs(data.createdAt) >= loaStart;
-  });
+  return snapshot.docs.some(item => timestampMs(item.data().createdAt) >= loaStart);
 }
 
 function closeModal() {
   document.documentElement.classList.remove('loa-access-open');
   document.getElementById('loaAccessModal')?.remove();
+}
+
+function scheduleDateRecheck(account, uid) {
+  clearTimeout(dateTimer);
+  const end = timestampMs(account.loaEndDate);
+  if (!end) return;
+  const delay = Math.max(1000, Math.min(end - Date.now() + 1000, 2147483647));
+  dateTimer = setTimeout(() => evaluateAccount(uid, account), delay);
 }
 
 function showModal(account) {
@@ -85,6 +92,7 @@ function showModal(account) {
         read: false,
       });
       closeModal();
+      evaluationToken += 1;
       window.dispatchEvent(new CustomEvent('canela-loa-ended-early'));
     } catch (error) {
       console.error('Unable to end LOA early.', error);
@@ -96,6 +104,38 @@ function showModal(account) {
   };
 }
 
+async function evaluateAccount(uid, account) {
+  const token = ++evaluationToken;
+  clearTimeout(dateTimer);
+
+  if (account.loaActive !== true) {
+    closeModal();
+    return;
+  }
+
+  const now = Date.now();
+  const starts = timestampMs(account.loaStartDate);
+  const ends = timestampMs(account.loaEndDate);
+  if ((starts && now < starts) || (ends && now > ends)) {
+    closeModal();
+    return;
+  }
+
+  try {
+    const early = await endedEarly(uid, account);
+    if (token !== evaluationToken) return;
+    if (early) {
+      closeModal();
+      return;
+    }
+    showModal(account);
+    scheduleDateRecheck(account, uid);
+  } catch (error) {
+    console.error('Unable to verify Leave of Absence status.', error);
+    if (token === evaluationToken) showModal(account);
+  }
+}
+
 document.addEventListener('keydown', event => {
   if (document.documentElement.classList.contains('loa-access-open') && event.key === 'Escape') {
     event.preventDefault();
@@ -103,27 +143,28 @@ document.addEventListener('keydown', event => {
   }
 }, true);
 
-onAuthStateChanged(auth, async user => {
+onAuthStateChanged(auth, user => {
+  stopAccountWatcher?.();
+  stopAccountWatcher = null;
+  clearTimeout(dateTimer);
   closeModal();
-  if (checking || !user || user.isAnonymous) return;
-  checking = true;
-  try {
-    const snapshot = await getDoc(doc(db, 'portalAccounts', user.uid));
-    if (!snapshot.exists()) return;
-    const account = snapshot.data();
-    if (account.loaActive !== true) return;
+  evaluationToken += 1;
 
-    const now = Date.now();
-    const starts = timestampMs(account.loaStartDate);
-    const ends = timestampMs(account.loaEndDate);
-    if (starts && now < starts) return;
-    if (ends && now > ends) return;
-    if (await endedEarly(user.uid, account)) return;
+  if (!user || user.isAnonymous) return;
+  stopAccountWatcher = onSnapshot(doc(db, 'portalAccounts', user.uid), snapshot => {
+    if (!snapshot.exists()) {
+      closeModal();
+      return;
+    }
+    evaluateAccount(user.uid, snapshot.data());
+  }, error => {
+    console.error('Unable to watch Leave of Absence status.', error);
+  });
+});
 
-    showModal(account);
-  } catch (error) {
-    console.error('Unable to verify Leave of Absence status.', error);
-  } finally {
-    checking = false;
-  }
+window.addEventListener('canela-account-status-changed', () => {
+  const user = auth.currentUser;
+  if (!user || user.isAnonymous) return;
+  // The account snapshot watcher will receive the update; this event simply prevents a stale modal.
+  evaluationToken += 1;
 });
