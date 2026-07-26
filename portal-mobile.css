@@ -1,0 +1,185 @@
+/* Mobile-first refinements for the Canela Portal */
+@media (max-width: 720px) {
+  html { font-size: 15px; }
+  body { overflow-x: hidden; }
+
+  .topbar {
+    min-height: 58px;
+    padding: 8px 10px !important;
+    gap: 8px;
+  }
+
+  .topbar .brand-mark { width: 34px; height: 34px; border-radius: 10px; }
+  .topbar .brand strong { font-size: .86rem; }
+  .topbar .brand span { font-size: .66rem; }
+  .portal-theme-toggle,
+  .icon-btn { min-height: 38px; }
+
+  .layout { min-width: 0; }
+  main {
+    width: 100%;
+    min-width: 0;
+    padding: 10px !important;
+    box-sizing: border-box;
+  }
+
+  .internship-center { gap: 12px !important; }
+  .internship-hero,
+  .internship-section {
+    padding: 15px !important;
+    border-radius: 17px !important;
+  }
+
+  .internship-hero p,
+  .internship-section-head p { font-size: .66rem !important; }
+  .internship-hero h1 { font-size: 1.45rem !important; line-height: 1.15; }
+  .internship-hero > div > span { font-size: .82rem; line-height: 1.4; }
+
+  .internship-stats,
+  .internship-current-status-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    margin-top: 13px !important;
+  }
+
+  .internship-stats article,
+  .internship-current-status-stats article {
+    min-width: 0;
+    padding: 12px !important;
+    border-radius: 13px !important;
+  }
+
+  .internship-stats strong,
+  .internship-current-status-stats strong { font-size: 1.28rem !important; }
+  .internship-stats span,
+  .internship-current-status-stats span { font-size: .64rem !important; }
+
+  .internship-tabs {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 7px !important;
+    overflow-x: auto;
+    padding: 2px 2px 7px;
+    margin: 0 -2px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .internship-tabs::-webkit-scrollbar { display: none; }
+  .internship-tab {
+    flex: 0 0 auto;
+    min-height: 39px;
+    padding: 8px 12px !important;
+    font-size: .76rem;
+    white-space: nowrap;
+    scroll-snap-align: start;
+  }
+
+  .internship-section-head {
+    margin-bottom: 13px !important;
+    gap: 10px !important;
+  }
+  .internship-section-head h2 { font-size: 1.22rem !important; }
+  .internship-section-head .internship-btn { width: auto !important; }
+
+  .internship-status-filters {
+    grid-template-columns: 1fr !important;
+    gap: 9px !important;
+    margin: 13px 0 !important;
+  }
+  .internship-status-filters label { gap: 5px !important; }
+  .internship-status-filters input,
+  .internship-status-filters select {
+    min-height: 43px;
+    padding: 9px 11px !important;
+    border-radius: 11px !important;
+    font-size: .86rem;
+  }
+  .internship-status-filters .internship-btn {
+    min-height: 43px;
+    width: 100% !important;
+  }
+
+  .internship-status-result-count { font-size: .8rem; }
+
+  /* Convert the wide internship status table into readable mobile cards. */
+  .internship-status-table-wrap {
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+  }
+  .internship-status-table {
+    min-width: 0 !important;
+    width: 100% !important;
+    background: transparent !important;
+  }
+  .internship-status-table thead { display: none; }
+  .internship-status-table,
+  .internship-status-table tbody,
+  .internship-status-table tr,
+  .internship-status-table td { display: block; width: 100%; box-sizing: border-box; }
+
+  .internship-status-table tbody {
+    display: grid;
+    gap: 10px;
+  }
+  .internship-status-table tr {
+    padding: 13px;
+    border: 1px solid var(--ui-border, #dfe8ef);
+    border-radius: 15px;
+    background: var(--ui-surface, rgba(255,255,255,.94));
+    box-shadow: 0 7px 18px rgba(20, 45, 65, .07);
+  }
+  .internship-status-table td {
+    display: grid;
+    grid-template-columns: minmax(92px, .75fr) minmax(0, 1.25fr);
+    align-items: center;
+    gap: 9px;
+    padding: 7px 0 !important;
+    border: 0 !important;
+    min-width: 0;
+    font-size: .8rem;
+  }
+  .internship-status-table td + td { border-top: 1px solid var(--ui-border, #e7edf2) !important; }
+  .internship-status-table td::before {
+    color: var(--ui-muted, #71808d);
+    font-size: .62rem;
+    font-weight: 900;
+    letter-spacing: .055em;
+    text-transform: uppercase;
+  }
+  .internship-status-table td:nth-child(1)::before { content: 'Intern'; }
+  .internship-status-table td:nth-child(2)::before { content: 'Department'; }
+  .internship-status-table td:nth-child(3)::before { content: 'Supervisor'; }
+  .internship-status-table td:nth-child(4)::before { content: 'Progress'; }
+  .internship-status-table td:nth-child(5)::before { content: 'Awaiting review'; }
+  .internship-status-table td:nth-child(6)::before { content: 'Overdue'; }
+  .internship-status-table td:nth-child(7)::before { content: 'Phase'; }
+  .internship-status-table td:nth-child(8)::before { content: 'Expected completion'; }
+  .internship-status-table td:nth-child(9)::before { content: 'Standing'; }
+
+  .internship-status-person,
+  .internship-status-progress { min-width: 0; }
+  .internship-status-person strong,
+  .internship-status-person span,
+  .internship-status-progress strong,
+  .internship-status-progress span,
+  .internship-status-progress small {
+    overflow-wrap: anywhere;
+  }
+  .internship-status-bar { min-width: 0 !important; width: 100%; }
+  .internship-status-badge { justify-self: start; }
+
+  .internship-grid,
+  .internship-detail-grid { grid-template-columns: 1fr !important; }
+  .internship-card { padding: 14px !important; border-radius: 15px !important; }
+
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}
+
+@media (max-width: 390px) {
+  .internship-stats,
+  .internship-current-status-stats { grid-template-columns: 1fr 1fr !important; }
+  .internship-status-table td { grid-template-columns: 86px minmax(0, 1fr); }
+}
