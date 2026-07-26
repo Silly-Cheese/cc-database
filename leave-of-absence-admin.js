@@ -33,7 +33,6 @@ async function enhanceAccountEditor() {
       accountUid = cards.find(card => card.textContent.includes(username))?.dataset.accountUid || null;
     }
 
-    // The existing editor does not expose its selected UID, so capture it from the open function.
     accountUid = accountUid || window.__canelaEditingAccountUid || null;
     if (!accountUid) return;
 
@@ -84,7 +83,16 @@ async function enhanceAccountEditor() {
           loaUpdatedBy: auth.currentUser.uid,
           ...(loaActive ? { loaEndedEarlyAt: null, loaEndedEarlyBy: null } : {}),
         });
-        await originalSubmit?.call(form, event);
+
+        // Event.currentTarget is cleared after an awaited handler. Supply the
+        // existing account editor with a stable form reference instead.
+        if (originalSubmit) {
+          await originalSubmit.call(form, {
+            preventDefault() {},
+            currentTarget: form,
+            target: form,
+          });
+        }
       } catch (error) {
         console.error('Unable to update Leave of Absence.', error);
         alert(`Unable to update Leave of Absence: ${error.code || error.message}`);
@@ -97,7 +105,6 @@ async function enhanceAccountEditor() {
   }
 }
 
-// Wrap the public editor opener so the selected UID is available to this enhancement.
 const wrapEditor = () => {
   if (!window.CanelaAccountEditor?.open || window.CanelaAccountEditor.__loaWrapped) return;
   const originalOpen = window.CanelaAccountEditor.open;
