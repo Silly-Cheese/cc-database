@@ -1,0 +1,290 @@
+:root {
+  --c-bg: #eef6fb;
+  --c-surface: rgba(255, 255, 255, 0.90);
+  --c-surface-2: rgba(247, 251, 254, 0.94);
+  --c-surface-3: rgba(235, 244, 250, 0.92);
+  --c-text: #173247;
+  --c-text-strong: #102739;
+  --c-muted: #62798a;
+  --c-border: rgba(52, 83, 105, 0.18);
+  --c-border-strong: rgba(52, 83, 105, 0.28);
+  --c-input: rgba(255, 255, 255, 0.96);
+  --c-hover: rgba(215, 235, 247, 0.72);
+  --c-selected: #17293a;
+  --c-selected-text: #ffffff;
+  --c-shadow: 0 16px 40px rgba(33, 65, 86, 0.13);
+  --c-shadow-soft: 0 8px 24px rgba(33, 65, 86, 0.09);
+}
+
+:root[data-theme='dark'] {
+  --c-bg: #0d1923;
+  --c-surface: rgba(17, 31, 43, 0.92);
+  --c-surface-2: rgba(22, 39, 53, 0.94);
+  --c-surface-3: rgba(29, 49, 65, 0.92);
+  --c-text: #e9f4fb;
+  --c-text-strong: #ffffff;
+  --c-muted: #a9becc;
+  --c-border: rgba(190, 220, 239, 0.17);
+  --c-border-strong: rgba(190, 220, 239, 0.28);
+  --c-input: rgba(8, 20, 30, 0.92);
+  --c-hover: rgba(69, 100, 121, 0.38);
+  --c-selected: #e8f4fb;
+  --c-selected-text: #102331;
+  --c-shadow: 0 20px 48px rgba(0, 0, 0, 0.34);
+  --c-shadow-soft: 0 10px 26px rgba(0, 0, 0, 0.24);
+}
+
+body,
+#app,
+.layout,
+main {
+  color: var(--c-text) !important;
+}
+
+/* Global page surfaces */
+main :where(
+  .panel,
+  .hero,
+  .dashboard-hero,
+  .dashboard-panel,
+  .dashboard-card,
+  .module-card,
+  .cards article,
+  .internship-hero,
+  .internship-section,
+  .internship-card,
+  .internship-enrollment-card,
+  .internship-stats article,
+  .internship-detail-grid article,
+  .internship-loading,
+  .internship-empty,
+  .quota-hero,
+  .quota-section,
+  .quota-card,
+  .quota-panel,
+  .quota-table-card,
+  .performance-hero,
+  .performance-section,
+  .performance-card,
+  .performance-panel,
+  .appeal-hero,
+  .appeal-section,
+  .appeal-card,
+  .policy-card,
+  .policy-panel,
+  .staff-card,
+  .personnel-card,
+  .alliance-card,
+  .compliance-card,
+  .training-card,
+  .report-card,
+  .summary-card,
+  .stat-card,
+  .metric-card,
+  .table-wrap,
+  .empty,
+  .details,
+  section[class*='-section'],
+  article[class*='-card'],
+  div[class*='-panel']
+) {
+  background: var(--c-surface) !important;
+  color: var(--c-text) !important;
+  border-color: var(--c-border) !important;
+  box-shadow: var(--c-shadow-soft) !important;
+}
+
+main :where(
+  .internship-stats article,
+  .internship-detail-grid article,
+  .quota-stat,
+  .performance-stat,
+  .dashboard-stat,
+  .summary-card,
+  .stat-card,
+  .metric-card,
+  .table-wrap,
+  .empty
+) {
+  background: var(--c-surface-2) !important;
+}
+
+/* Typography */
+main :where(h1, h2, h3, h4, strong, b, legend, dt, th) {
+  color: var(--c-text-strong) !important;
+}
+
+main :where(p, span, small, label, dd, td, li) {
+  color: var(--c-text) !important;
+}
+
+main :where(.muted, .subtitle, .helper, .hint, [class*='-meta'], [class*='-description']) {
+  color: var(--c-muted) !important;
+}
+
+/* Inputs and filters */
+main :where(input, select, textarea) {
+  background: var(--c-input) !important;
+  color: var(--c-text-strong) !important;
+  border-color: var(--c-border-strong) !important;
+}
+
+main :where(input, textarea)::placeholder {
+  color: var(--c-muted) !important;
+  opacity: 0.82;
+}
+
+main :where(input, select, textarea):focus {
+  border-color: rgba(104, 174, 218, 0.72) !important;
+  box-shadow: 0 0 0 4px rgba(104, 174, 218, 0.16) !important;
+}
+
+/* Tables */
+main table {
+  color: var(--c-text) !important;
+}
+
+main thead,
+main thead tr,
+main th {
+  background: var(--c-surface-3) !important;
+  color: var(--c-text-strong) !important;
+  border-color: var(--c-border) !important;
+}
+
+main tbody tr,
+main td {
+  background: transparent !important;
+  color: var(--c-text) !important;
+  border-color: var(--c-border) !important;
+}
+
+main tbody tr:hover {
+  background: var(--c-hover) !important;
+}
+
+/* Tabs and secondary controls */
+main :where(
+  .internship-tab,
+  .quota-tab,
+  .performance-tab,
+  .appeal-tab,
+  .policy-tab,
+  .filter-chip,
+  .tab-button,
+  [role='tab']
+) {
+  background: var(--c-surface-2) !important;
+  color: var(--c-text-strong) !important;
+  border-color: var(--c-border-strong) !important;
+  box-shadow: none !important;
+}
+
+main :where(
+  .internship-tab.active,
+  .quota-tab.active,
+  .performance-tab.active,
+  .appeal-tab.active,
+  .policy-tab.active,
+  .filter-chip.active,
+  .tab-button.active,
+  [role='tab'][aria-selected='true']
+) {
+  background: var(--c-selected) !important;
+  color: var(--c-selected-text) !important;
+  border-color: var(--c-selected) !important;
+}
+
+/* Buttons */
+main :where(button.secondary, .secondary, .internship-btn.secondary, .crud-actions .secondary) {
+  background: var(--c-surface-2) !important;
+  color: var(--c-text-strong) !important;
+  border-color: var(--c-border-strong) !important;
+}
+
+/* Common dropdowns and popovers */
+:where(.dropdown-menu, .popover, .menu-panel, .filter-menu, .select-menu) {
+  background: var(--c-surface-2) !important;
+  color: var(--c-text) !important;
+  border-color: var(--c-border) !important;
+  box-shadow: var(--c-shadow) !important;
+}
+
+/* Modal surfaces, excluding the LOA/deactivation access blockers */
+:where(
+  .crud-modal,
+  .account-code-modal,
+  .internship-modal,
+  .performance-modal,
+  .quota-modal,
+  .appeal-modal,
+  .policy-modal
+) {
+  background: var(--c-surface-2) !important;
+  color: var(--c-text) !important;
+  border-color: var(--c-border) !important;
+}
+
+:where(
+  .crud-modal,
+  .account-code-modal,
+  .internship-modal,
+  .performance-modal,
+  .quota-modal,
+  .appeal-modal,
+  .policy-modal
+) :where(h1, h2, h3, strong, label, p, span, small) {
+  color: var(--c-text) !important;
+}
+
+:where(
+  .crud-modal,
+  .account-code-modal,
+  .internship-modal,
+  .performance-modal,
+  .quota-modal,
+  .appeal-modal,
+  .policy-modal
+) :where(input, select, textarea) {
+  background: var(--c-input) !important;
+  color: var(--c-text-strong) !important;
+  border-color: var(--c-border-strong) !important;
+}
+
+/* Navigation readability */
+.topbar,
+#sidebar {
+  color: var(--c-text) !important;
+  border-color: var(--c-border) !important;
+}
+
+#sidebar .nav-item {
+  color: var(--c-text) !important;
+}
+
+#sidebar .nav-item:hover {
+  background: var(--c-hover) !important;
+}
+
+#sidebar .nav-item.active {
+  background: var(--c-selected) !important;
+  color: var(--c-selected-text) !important;
+}
+
+/* Keep destructive, success, warning, and LOA/deactivation states semantic. */
+.deactivated-account-backdrop,
+.loa-access-backdrop,
+.deactivation-appeal-status,
+.loa-admin-panel,
+.alert,
+[class*='danger'],
+[class*='warning'],
+[class*='success'] {
+  color-scheme: normal;
+}
+
+@media (max-width: 720px) {
+  main :where(.panel, section[class*='-section'], article[class*='-card']) {
+    box-shadow: none !important;
+  }
+}
