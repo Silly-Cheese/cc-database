@@ -1,31 +1,38 @@
 :root {
   color-scheme: light;
   --portal-bg-image: url('./assets/canela-light-background.jpg');
-  --portal-bg-overlay: linear-gradient(rgba(247, 252, 255, 0.54), rgba(245, 250, 255, 0.72));
-  --portal-surface: rgba(255, 255, 255, 0.88);
-  --portal-surface-strong: rgba(255, 255, 255, 0.95);
-  --portal-border: rgba(39, 71, 94, 0.15);
+  --portal-bg-overlay: linear-gradient(rgba(247, 252, 255, 0.42), rgba(245, 250, 255, 0.58));
+  --portal-surface: rgba(255, 255, 255, 0.90);
+  --portal-surface-strong: rgba(255, 255, 255, 0.97);
+  --portal-border: rgba(39, 71, 94, 0.16);
   --portal-text: #18344a;
   --portal-muted: #60788b;
   --portal-shadow: 0 18px 48px rgba(31, 67, 88, 0.13);
+  --portal-card: rgba(255,255,255,.94);
+  --portal-card-soft: rgba(248,251,253,.94);
+  --portal-input: rgba(255,255,255,.98);
+  --portal-button: #17212b;
+  --portal-button-text: #ffffff;
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
   --portal-bg-image: url('./assets/canela-dark-background.jpg');
-  --portal-bg-overlay: linear-gradient(rgba(2, 10, 18, 0.72), rgba(2, 10, 18, 0.86));
-  --portal-surface: rgba(12, 25, 37, 0.84);
-  --portal-surface-strong: rgba(12, 25, 37, 0.94);
-  --portal-border: rgba(195, 225, 245, 0.16);
+  --portal-bg-overlay: linear-gradient(rgba(2, 10, 18, 0.56), rgba(2, 10, 18, 0.72));
+  --portal-surface: rgba(12, 25, 37, 0.88);
+  --portal-surface-strong: rgba(9, 20, 31, 0.97);
+  --portal-border: rgba(195, 225, 245, 0.18);
   --portal-text: #edf7ff;
-  --portal-muted: #abc0cf;
+  --portal-muted: #afc3d1;
   --portal-shadow: 0 22px 55px rgba(0, 0, 0, 0.38);
+  --portal-card: rgba(18,33,46,.94);
+  --portal-card-soft: rgba(23,40,55,.92);
+  --portal-input: rgba(7,18,28,.94);
+  --portal-button: #dcecff;
+  --portal-button-text: #102131;
 }
 
-html,
-body {
-  min-height: 100%;
-}
+html, body { min-height: 100%; }
 
 body {
   background-image: var(--portal-bg-overlay), var(--portal-bg-image) !important;
@@ -68,26 +75,74 @@ body::before {
   -webkit-backdrop-filter: blur(16px) saturate(125%);
 }
 
-.topbar,
-#sidebar {
-  background: var(--portal-surface-strong) !important;
+.topbar, #sidebar { background: var(--portal-surface-strong) !important; }
+main, .layout, #app { background: transparent !important; }
+
+/* Component surfaces */
+.internship-hero,
+.internship-section,
+.internship-card,
+.internship-stats article,
+.internship-detail-grid article,
+.internship-enrollment-card,
+.internship-loading,
+.internship-empty,
+.quota-card,
+.quota-section,
+.performance-card,
+.appeal-card {
+  background: var(--portal-card) !important;
+  border-color: var(--portal-border) !important;
+  color: var(--portal-text) !important;
 }
 
-main,
-.layout,
-#app {
-  background: transparent !important;
+.internship-stats article,
+.internship-detail-grid article,
+.internship-enrollment-card {
+  background: var(--portal-card-soft) !important;
 }
 
-:root[data-theme='dark'] .topbar,
-:root[data-theme='dark'] #sidebar,
-:root[data-theme='dark'] .panel,
-:root[data-theme='dark'] .hero,
-:root[data-theme='dark'] .cards article,
-:root[data-theme='dark'] .module-card,
-:root[data-theme='dark'] .dashboard-panel,
-:root[data-theme='dark'] .dashboard-card,
-:root[data-theme='dark'] .dashboard-hero {
+.internship-tab,
+.internship-btn.secondary,
+.quota-tab,
+.performance-tab {
+  background: var(--portal-card) !important;
+  color: var(--portal-text) !important;
+  border-color: var(--portal-border) !important;
+}
+
+.internship-tab.active,
+.internship-btn:not(.secondary),
+.quota-tab.active,
+.performance-tab.active {
+  background: var(--portal-button) !important;
+  color: var(--portal-button-text) !important;
+  border-color: transparent !important;
+}
+
+/* Restore readable text everywhere */
+:root[data-theme='dark'] .internship-center,
+:root[data-theme='dark'] .internship-hero,
+:root[data-theme='dark'] .internship-section,
+:root[data-theme='dark'] .internship-card,
+:root[data-theme='dark'] .internship-stats article,
+:root[data-theme='dark'] .internship-detail-grid article,
+:root[data-theme='dark'] .internship-enrollment-card,
+:root[data-theme='dark'] .quota-center,
+:root[data-theme='dark'] .performance-center,
+:root[data-theme='dark'] .appeal-center {
+  color: var(--portal-text) !important;
+}
+
+:root[data-theme='dark'] h1,
+:root[data-theme='dark'] h2,
+:root[data-theme='dark'] h3,
+:root[data-theme='dark'] h4,
+:root[data-theme='dark'] strong,
+:root[data-theme='dark'] b,
+:root[data-theme='dark'] .internship-hero h1,
+:root[data-theme='dark'] .internship-section-head h2,
+:root[data-theme='dark'] .internship-card h3 {
   color: var(--portal-text) !important;
 }
 
@@ -98,16 +153,45 @@ main,
 :root[data-theme='dark'] td,
 :root[data-theme='dark'] th,
 :root[data-theme='dark'] dt,
-:root[data-theme='dark'] dd {
-  color: inherit;
+:root[data-theme='dark'] dd,
+:root[data-theme='dark'] .internship-hero > div > span,
+:root[data-theme='dark'] .internship-card p,
+:root[data-theme='dark'] .internship-meta,
+:root[data-theme='dark'] .internship-stats span,
+:root[data-theme='dark'] .internship-detail-grid span,
+:root[data-theme='dark'] .internship-section-head p {
+  color: var(--portal-muted) !important;
 }
 
 :root[data-theme='dark'] input,
 :root[data-theme='dark'] select,
-:root[data-theme='dark'] textarea {
-  background: rgba(7, 18, 28, 0.88) !important;
+:root[data-theme='dark'] textarea,
+:root[data-theme='dark'] .internship-field input,
+:root[data-theme='dark'] .internship-field select,
+:root[data-theme='dark'] .internship-field textarea {
+  background: var(--portal-input) !important;
   color: var(--portal-text) !important;
   border-color: var(--portal-border) !important;
+}
+
+:root[data-theme='dark'] input::placeholder,
+:root[data-theme='dark'] textarea::placeholder { color: #7890a2 !important; }
+
+:root[data-theme='dark'] .internship-badge {
+  background: rgba(255,255,255,.10) !important;
+  color: var(--portal-text) !important;
+}
+
+:root[data-theme='dark'] .internship-badge.approved,
+:root[data-theme='dark'] .internship-badge.completed,
+:root[data-theme='dark'] .internship-badge.active {
+  background: rgba(46,160,90,.22) !important;
+  color: #a9efbf !important;
+}
+
+:root[data-theme='dark'] .internship-badge.submitted {
+  background: rgba(205,145,30,.22) !important;
+  color: #ffd990 !important;
 }
 
 .portal-theme-toggle {
@@ -127,31 +211,12 @@ main,
   backdrop-filter: blur(12px);
 }
 
-.portal-theme-toggle:hover {
-  transform: translateY(-1px);
-}
-
-.portal-theme-toggle:focus-visible {
-  outline: 3px solid rgba(110, 190, 240, 0.48);
-  outline-offset: 2px;
-}
-
-.portal-theme-toggle .theme-icon {
-  font-size: 1rem;
-}
+.portal-theme-toggle:hover { transform: translateY(-1px); }
+.portal-theme-toggle:focus-visible { outline: 3px solid rgba(110, 190, 240, 0.48); outline-offset: 2px; }
+.portal-theme-toggle .theme-icon { font-size: 1rem; }
 
 @media (max-width: 720px) {
-  body {
-    background-attachment: scroll !important;
-  }
-
-  .portal-theme-toggle .theme-label {
-    display: none;
-  }
-
-  .portal-theme-toggle {
-    width: 42px;
-    justify-content: center;
-    padding: 0;
-  }
+  body { background-attachment: scroll !important; }
+  .portal-theme-toggle .theme-label { display: none; }
+  .portal-theme-toggle { width: 42px; justify-content: center; padding: 0; }
 }
