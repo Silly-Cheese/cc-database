@@ -1,6 +1,7 @@
 :root {
   color-scheme: light;
-  --portal-bg-image: url('./assets/canela-light-background.jpg');
+  --portal-bg-image: url('./assets/backgrounds/canela-light-background.jpg');
+  --portal-bg-fallback: linear-gradient(135deg, #dff7f1 0%, #eaf4ff 48%, #fff2f7 100%);
   --portal-bg-overlay: linear-gradient(rgba(247, 252, 255, 0.42), rgba(245, 250, 255, 0.58));
   --portal-surface: rgba(255, 255, 255, 0.90);
   --portal-surface-strong: rgba(255, 255, 255, 0.97);
@@ -17,7 +18,8 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --portal-bg-image: url('./assets/canela-dark-background.jpg');
+  --portal-bg-image: url('./assets/backgrounds/canela-dark-background.jpg');
+  --portal-bg-fallback: linear-gradient(145deg, #07121d 0%, #102535 52%, #182a3c 100%);
   --portal-bg-overlay: linear-gradient(rgba(2, 10, 18, 0.56), rgba(2, 10, 18, 0.72));
   --portal-surface: rgba(12, 25, 37, 0.88);
   --portal-surface-strong: rgba(9, 20, 31, 0.97);
@@ -35,9 +37,10 @@
 html, body { min-height: 100%; }
 
 body {
-  background-image: var(--portal-bg-overlay), var(--portal-bg-image) !important;
-  background-size: cover !important;
-  background-position: center !important;
+  background-color: transparent !important;
+  background-image: var(--portal-bg-overlay), var(--portal-bg-image), var(--portal-bg-fallback) !important;
+  background-size: cover, cover, cover !important;
+  background-position: center, center, center !important;
   background-repeat: no-repeat !important;
   background-attachment: fixed !important;
   color: var(--portal-text);
