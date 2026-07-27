@@ -102,7 +102,6 @@
 
   .internship-status-result-count { font-size: .8rem; }
 
-  /* Convert the wide internship status table into readable mobile cards. */
   .internship-status-table-wrap {
     overflow: visible !important;
     border: 0 !important;
@@ -165,9 +164,7 @@
   .internship-status-person span,
   .internship-status-progress strong,
   .internship-status-progress span,
-  .internship-status-progress small {
-    overflow-wrap: anywhere;
-  }
+  .internship-status-progress small { overflow-wrap: anywhere; }
   .internship-status-bar { min-width: 0 !important; width: 100%; }
   .internship-status-badge { justify-self: start; }
 
@@ -176,6 +173,52 @@
   .internship-card { padding: 14px !important; border-radius: 15px !important; }
 
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}
+
+@media (max-width: 900px) {
+  #sidebar {
+    position: fixed !important;
+    top: 72px !important;
+    left: 0 !important;
+    width: min(86vw, 320px) !important;
+    height: calc(100dvh - 72px) !important;
+    z-index: 1001 !important;
+    transform: translateX(-110%) !important;
+    transition: transform .22s ease !important;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    box-shadow: 18px 0 45px rgba(20, 42, 57, .28) !important;
+  }
+
+  #sidebar.open {
+    transform: translateX(0) !important;
+  }
+
+  .mobile-nav-backdrop {
+    display: block;
+    position: fixed;
+    inset: 72px 0 0;
+    z-index: 1000;
+    border: 0;
+    padding: 0;
+    background: rgba(7, 18, 27, .42);
+    backdrop-filter: blur(3px);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity .2s ease, visibility .2s ease;
+  }
+
+  .mobile-nav-backdrop.open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  html.mobile-nav-open,
+  html.mobile-nav-open body {
+    overflow: hidden;
+  }
 }
 
 @media (max-width: 390px) {
