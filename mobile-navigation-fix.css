@@ -1,0 +1,73 @@
+@media (max-width: 900px) {
+  #sidebar,
+  .layout > aside {
+    position: fixed !important;
+    top: 72px !important;
+    left: 0 !important;
+    width: min(84vw, 285px) !important;
+    height: calc(100dvh - 72px) !important;
+    z-index: 1200 !important;
+    transform: translateX(-105%) !important;
+    transition: transform 220ms ease !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    visibility: visible !important;
+    pointer-events: none;
+  }
+
+  #sidebar.open,
+  .layout > aside.open {
+    transform: translateX(0) !important;
+    pointer-events: auto;
+  }
+
+  html.mobile-nav-open,
+  html.mobile-nav-open body {
+    overflow: hidden;
+  }
+
+  .mobile-nav-backdrop {
+    position: fixed;
+    inset: 72px 0 0;
+    z-index: 1190;
+    width: 100%;
+    height: calc(100dvh - 72px);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: rgba(9, 18, 28, 0.46);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 180ms ease;
+  }
+
+  .mobile-nav-backdrop.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  #menuBtn,
+  .topbar .icon-btn {
+    position: relative;
+    z-index: 1210;
+    min-width: 44px;
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+}
+
+@media (max-width: 560px) {
+  #sidebar,
+  .layout > aside {
+    top: 72px !important;
+    height: calc(100dvh - 72px) !important;
+  }
+
+  .mobile-nav-backdrop {
+    inset: 72px 0 0;
+    height: calc(100dvh - 72px);
+  }
+}
