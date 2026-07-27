@@ -89,7 +89,7 @@ function navButton() {
   const button = document.createElement('button');
   button.className = 'nav-item';
   button.dataset.performanceCenter = 'true';
-  button.innerHTML = '<span>📈</span>Performance Center';
+  button.innerHTML = '<span>📝</span>Forms Center';
   const training = sidebar.querySelector('[data-view="training"]');
   if (training) sidebar.insertBefore(button, training); else sidebar.appendChild(button);
   button.onclick = () => openPerformanceCenter();
@@ -110,7 +110,7 @@ async function openPerformanceCenter(tabName = currentTab) {
   currentTab = tabName;
   const main = document.querySelector('.layout > main');
   if (!main) return;
-  main.innerHTML = '<section class="performance-loading">Loading Performance Center…</section>';
+  main.innerHTML = '<section class="performance-loading">Loading Forms Center…</section>';
   try {
     const data = await loadData();
     const uid = auth.currentUser?.uid;
@@ -121,50 +121,46 @@ async function openPerformanceCenter(tabName = currentTab) {
     main.innerHTML = `
       <div class="performance-center">
         <section class="performance-hero">
-          <div class="performance-hero-head"><div><p>WORKFORCE DEVELOPMENT</p><h1>Performance Center</h1><span>Create structured reviews, route approvals by permission, and maintain an auditable performance history.</span></div>${canCreate() ? '<button class="performance-btn primary" id="createPerformanceReview">+ New review</button>' : ''}</div>
-          <div class="performance-stats">${stat(assigned,'Assigned to me')}${stat(pending,'In progress')}${stat(completed,'Completed')}${stat(data.templates.length,'Templates')}</div>
+          <div class="performance-hero-head"><div><p>FORMS & REVIEWS</p><h1>Forms Center</h1><span>Complete assigned forms, review submissions, and manage reusable forms in one place.</span></div>${canCreate() ? '<button class="performance-btn primary" id="createPerformanceReview">+ Assign Form</button>' : ''}</div>
+          <div class="performance-stats">${stat(assigned,'Assigned to me')}${stat(pending,'Awaiting action')}${stat(completed,'Completed')}${stat(data.templates.length,'Available forms')}</div>
         </section>
         <nav class="performance-tabs">
-          ${tab('my-reviews','My Reviews')}
+          ${tab('my-reviews','My Forms')}
           ${(canEvaluate() || canApprove() || canFinalize()) ? tab('queue','Review Queue') : ''}
-          ${canViewAll() ? tab('all','All Reviews') : ''}
-          ${canManageTemplates() ? tab('templates','Templates') : ''}
-          ${canManageWorkflows() ? tab('workflows','Workflows') : ''}
-          ${canManage() ? tab('permissions','Permission Guide') : ''}
+          ${canViewAll() ? tab('all','All Forms') : ''}
+          ${canManageTemplates() ? tab('templates','Manage Forms') : ''}
         </nav>
         <section class="performance-view" id="performanceView">${renderTab(data, visible)}</section>
       </div>`;
     bindActions(data);
   } catch (error) {
     console.error(error);
-    main.innerHTML = `<section class="panel"><h1>Performance Center</h1><p class="error">Unable to load: ${esc(error.code || error.message)}</p></section>`;
+    main.innerHTML = `<section class="panel"><h1>Forms Center</h1><p class="error">Unable to load: ${esc(error.code || error.message)}</p></section>`;
   }
 }
 
 function renderTab(data, visible) {
   if (currentTab === 'queue') return renderQueue(data);
-  if (currentTab === 'all') return renderReviews(data, data.reviews, 'All performance reviews');
+  if (currentTab === 'all') return renderReviews(data, data.reviews, 'All forms');
   if (currentTab === 'templates') return renderTemplates(data);
-  if (currentTab === 'workflows') return renderWorkflows(data);
-  if (currentTab === 'permissions') return renderPermissions();
-  return renderReviews(data, visible.filter(review => review.employeeUid === auth.currentUser?.uid || review.createdBy === auth.currentUser?.uid || review.currentAssignedToUid === auth.currentUser?.uid), 'My performance reviews');
+  return renderReviews(data, visible.filter(review => review.employeeUid === auth.currentUser?.uid || review.createdBy === auth.currentUser?.uid || review.currentAssignedToUid === auth.currentUser?.uid), 'My forms');
 }
 
 function renderReviews(data, reviews, title) {
   const sorted = [...reviews].sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-  return `<section class="performance-section"><div class="performance-section-head"><div><p>REVIEW RECORDS</p><h2>${esc(title)}</h2></div><span>${sorted.length} records</span></div><div class="performance-grid">${sorted.map(review => reviewCard(data, review)).join('') || '<div class="performance-empty">No performance reviews are available here yet.</div>'}</div></section>`;
+  return `<section class="performance-section"><div class="performance-section-head"><div><p>FORM ASSIGNMENTS</p><h2>${esc(title)}</h2></div><span>${sorted.length} records</span></div><div class="performance-grid">${sorted.map(review => reviewCard(data, review)).join('') || '<div class="performance-empty">No forms are available here yet.</div>'}</div></section>`;
 }
 
 function reviewCard(data, review) {
   const employee = review.employeeName || displayNameFor(data, review.employeeUid);
   const assignee = review.currentAssignedToName || displayNameFor(data, review.currentAssignedToUid);
-  return `<article class="performance-card"><div class="performance-card-head">${badge(review.status)}<strong>${Number(review.overallScore || 0)}${review.overallScore ? '%' : ''}</strong></div><h3>${esc(review.title || 'Performance Review')}</h3><p>${esc(employee)}</p><div class="performance-meta"><div><span>Current owner</span><strong>${esc(assignee || 'Unassigned')}</strong></div><div><span>Due</span><strong>${dateText(review.dueDate)}</strong></div><div><span>Current step</span><strong>${esc(review.currentStepName || 'Not started')}</strong></div><div><span>Created</span><strong>${dateText(review.createdAt)}</strong></div></div><div class="performance-card-actions"><button class="performance-btn performance-open-review" data-id="${review.id}">Open review</button></div></article>`;
+  return `<article class="performance-card"><div class="performance-card-head">${badge(review.status)}<strong>${Number(review.overallScore || 0)}${review.overallScore ? '%' : ''}</strong></div><h3>${esc(review.title || 'Assigned Form')}</h3><p>${esc(employee)}</p><div class="performance-meta"><div><span>Reviewer</span><strong>${esc(assignee || 'Unassigned')}</strong></div><div><span>Due</span><strong>${dateText(review.dueDate)}</strong></div><div><span>Status</span><strong>${esc(review.currentStepName || 'Not started')}</strong></div><div><span>Assigned</span><strong>${dateText(review.createdAt)}</strong></div></div><div class="performance-card-actions"><button class="performance-btn performance-open-review" data-id="${review.id}">Open form</button></div></article>`;
 }
 
 function renderQueue(data) {
   const uid = auth.currentUser?.uid;
   const reviews = data.reviews.filter(review => review.currentAssignedToUid === uid || (!review.currentAssignedToUid && userCanHandlePermission(review.currentRequiredPermission)));
-  return `<section class="performance-section"><div class="performance-section-head"><div><p>ASSIGNED WORK</p><h2>Review queue</h2></div><span>${reviews.length} awaiting action</span></div><div class="performance-grid">${reviews.map(review => reviewCard(data, review)).join('') || '<div class="performance-empty">Nothing is currently assigned to you.</div>'}</div></section>`;
+  return `<section class="performance-section"><div class="performance-section-head"><div><p>SUBMISSIONS TO REVIEW</p><h2>Review queue</h2></div><span>${reviews.length} awaiting action</span></div><div class="performance-grid">${reviews.map(review => reviewCard(data, review)).join('') || '<div class="performance-empty">Nothing is currently waiting for your review.</div>'}</div></section>`;
 }
 
 function userCanHandlePermission(permission) {
@@ -172,7 +168,7 @@ function userCanHandlePermission(permission) {
 }
 
 function renderTemplates(data) {
-  return `<section class="performance-section"><div class="performance-section-head"><div><p>FORM BUILDER</p><h2>Review templates</h2></div><button class="performance-btn primary" id="newPerformanceTemplate">+ New template</button></div><div class="performance-grid">${data.templates.map(template => `<article class="performance-card"><div class="performance-card-head">${badge(template.status || 'DRAFT')}<strong>${(template.fields || []).length} fields</strong></div><h3>${esc(template.title || 'Untitled template')}</h3><p>${esc(template.description || 'Reusable performance-review form.')}</p><div class="performance-meta"><div><span>Category</span><strong>${esc(template.category || 'General')}</strong></div><div><span>Workflow</span><strong>${esc(data.workflows.find(item => item.id === template.workflowId)?.title || 'None')}</strong></div></div><div class="performance-card-actions"><button class="performance-btn performance-edit-template" data-id="${template.id}">Edit</button><button class="performance-btn danger performance-delete-template" data-id="${template.id}">Delete</button></div></article>`).join('') || '<div class="performance-empty">Create your first reusable review template.</div>'}</div></section>`;
+  return `<section class="performance-section"><div class="performance-section-head"><div><p>FORM BUILDER</p><h2>Manage Forms</h2></div><button class="performance-btn primary" id="newPerformanceTemplate">+ New Form</button></div><div class="performance-grid">${data.templates.map(template => `<article class="performance-card"><div class="performance-card-head">${badge(template.status || 'DRAFT')}<strong>${(template.fields || []).length} fields</strong></div><h3>${esc(template.title || 'Untitled form')}</h3><p>${esc(template.description || 'Reusable staff form.')}</p><div class="performance-meta"><div><span>Category</span><strong>${esc(template.category || 'General')}</strong></div></div><div class="performance-card-actions"><button class="performance-btn performance-edit-template" data-id="${template.id}">Edit</button><button class="performance-btn danger performance-delete-template" data-id="${template.id}">Delete</button></div></article>`).join('') || '<div class="performance-empty">Create your first reusable form.</div>'}</div></section>`;
 }
 
 function renderWorkflows(data) {
@@ -180,27 +176,27 @@ function renderWorkflows(data) {
 }
 
 function renderPermissions() {
-  return `<section class="performance-section"><div class="performance-section-head"><div><p>ACCESS CONTROL</p><h2>Performance permissions</h2></div></div><div class="performance-permission-list">${PERMISSIONS.map(permission => `<article><code>${esc(permission)}</code><span>${permissionDescription(permission)}</span></article>`).join('')}</div></section>`;
+  return `<section class="performance-section"><div class="performance-section-head"><div><p>ACCESS CONTROL</p><h2>Forms Center permissions</h2></div></div><div class="performance-permission-list">${PERMISSIONS.map(permission => `<article><code>${esc(permission)}</code><span>${permissionDescription(permission)}</span></article>`).join('')}</div></section>`;
 }
 
 function permissionDescription(permission) {
   const map = {
-    'performance.access':'Open the Performance Center.',
-    'performance.review.create':'Create and assign performance reviews.',
-    'performance.review.self_complete':'Complete an assigned self-evaluation.',
-    'performance.review.evaluate':'Complete reviewer evaluation stages.',
-    'performance.review.approve':'Approve completed evaluations.',
-    'performance.review.finalize':'Finalize the permanent review record.',
-    'performance.review.reopen':'Reopen a completed review.',
-    'performance.review.delete':'Delete review records.',
-    'performance.review.view_assigned':'View reviews assigned to the account.',
-    'performance.review.view_all':'View all performance reviews.',
-    'performance.review.manage_templates':'Create and edit form templates.',
-    'performance.review.manage_workflows':'Create and edit approval workflows.',
-    'performance.review.manage':'Full Performance Center management.',
+    'performance.access':'Open the Forms Center.',
+    'performance.review.create':'Create and assign forms.',
+    'performance.review.self_complete':'Complete an assigned form.',
+    'performance.review.evaluate':'Review submitted forms.',
+    'performance.review.approve':'Approve submitted forms.',
+    'performance.review.finalize':'Finalize a completed form record.',
+    'performance.review.reopen':'Reopen a completed form.',
+    'performance.review.delete':'Delete form records.',
+    'performance.review.view_assigned':'View forms assigned to the account.',
+    'performance.review.view_all':'View all form assignments.',
+    'performance.review.manage_templates':'Create and edit reusable forms.',
+    'performance.review.manage_workflows':'Manage legacy approval workflows.',
+    'performance.review.manage':'Full Forms Center management.',
     'performance.notes.private':'View and create private management notes.',
-    'performance.reports.view':'View performance analytics and reports.',
-    'performance.reports.export':'Export performance records.',
+    'performance.reports.view':'View forms analytics and reports.',
+    'performance.reports.export':'Export form records.',
   };
   return map[permission] || '';
 }
@@ -210,165 +206,98 @@ function bindActions(data) {
   document.getElementById('createPerformanceReview')?.addEventListener('click', () => reviewModal(data));
   document.getElementById('newPerformanceTemplate')?.addEventListener('click', () => templateModal(data));
   document.getElementById('newPerformanceWorkflow')?.addEventListener('click', () => workflowModal(data));
-  document.querySelectorAll('.performance-open-review').forEach(button => button.onclick = () => reviewDetailModal(data, data.reviews.find(item => item.id === button.dataset.id)));
+  document.querySelectorAll('.performance-open-review').forEach(button => button.onclick = () => openReviewModal(data, button.dataset.id));
   document.querySelectorAll('.performance-edit-template').forEach(button => button.onclick = () => templateModal(data, data.templates.find(item => item.id === button.dataset.id)));
+  document.querySelectorAll('.performance-delete-template').forEach(button => button.onclick = () => deleteTemplate(button.dataset.id));
   document.querySelectorAll('.performance-edit-workflow').forEach(button => button.onclick = () => workflowModal(data, data.workflows.find(item => item.id === button.dataset.id)));
-  document.querySelectorAll('.performance-delete-template').forEach(button => button.onclick = () => removeRecord('performanceTemplates', button.dataset.id, 'template'));
-  document.querySelectorAll('.performance-delete-workflow').forEach(button => button.onclick = () => removeRecord('performanceWorkflows', button.dataset.id, 'workflow'));
+  document.querySelectorAll('.performance-delete-workflow').forEach(button => button.onclick = () => deleteWorkflow(button.dataset.id));
 }
 
-function modal(title, body, onSubmit, wide = false) {
-  document.getElementById('performanceModal')?.remove();
-  document.body.insertAdjacentHTML('beforeend', `<div class="performance-modal-backdrop" id="performanceModal"><section class="performance-modal ${wide ? 'wide' : ''}"><div class="performance-modal-head"><div><p>PERFORMANCE CENTER</p><h2>${esc(title)}</h2></div><button type="button" id="closePerformanceModal">×</button></div><form id="performanceModalForm">${body}<div class="performance-modal-actions"><button type="button" class="performance-btn" id="cancelPerformanceModal">Cancel</button><button type="submit" class="performance-btn primary">Save</button></div></form></section></div>`);
-  const close = () => document.getElementById('performanceModal')?.remove();
-  document.getElementById('closePerformanceModal').onclick = close;
-  document.getElementById('cancelPerformanceModal').onclick = close;
-  document.getElementById('performanceModalForm').onsubmit = async event => {
+function modal(content) {
+  document.querySelector('.performance-modal-overlay')?.remove();
+  document.body.insertAdjacentHTML('beforeend', `<div class="performance-modal-overlay"><section class="performance-modal">${content}</section></div>`);
+  document.querySelector('.performance-modal-overlay').onclick = event => { if (event.target.classList.contains('performance-modal-overlay')) event.currentTarget.remove(); };
+  document.querySelectorAll('[data-performance-close]').forEach(button => button.onclick = () => document.querySelector('.performance-modal-overlay')?.remove());
+}
+
+function closeModal() { document.querySelector('.performance-modal-overlay')?.remove(); }
+
+function templateModal(data, template = null) {
+  const isEdit = Boolean(template);
+  modal(`<form id="performanceTemplateForm"><div class="performance-modal-head"><div><p>FORM BUILDER</p><h2>${isEdit ? 'Edit form' : 'Create form'}</h2></div><button type="button" data-performance-close>×</button></div><div class="performance-modal-body"><label>Form title<input name="title" value="${esc(template?.title || '')}" required></label><label>Description<textarea name="description">${esc(template?.description || '')}</textarea></label><label>Category<input name="category" value="${esc(template?.category || 'General')}"></label><label>Status<select name="status"><option>DRAFT</option><option ${template?.status === 'ACTIVE' ? 'selected' : ''}>ACTIVE</option><option ${template?.status === 'ARCHIVED' ? 'selected' : ''}>ARCHIVED</option></select></label><label>Fields as JSON<textarea name="fields" required>${esc(JSON.stringify(template?.fields || [], null, 2))}</textarea></label></div><div class="performance-modal-actions"><button type="button" class="performance-btn" data-performance-close>Cancel</button><button class="performance-btn primary">${isEdit ? 'Save form' : 'Create form'}</button></div></form>`);
+  document.getElementById('performanceTemplateForm').onsubmit = async event => {
     event.preventDefault();
-    const submit = event.currentTarget.querySelector('[type="submit"]');
-    submit.disabled = true;
-    try {
-      await onSubmit(new FormData(event.currentTarget));
-      cache = null;
-      close();
-      await openPerformanceCenter(currentTab);
-    } catch (error) {
-      console.error(error);
-      alert(`Unable to save: ${error.code || error.message}`);
-      submit.disabled = false;
-    }
+    const form = new FormData(event.currentTarget);
+    let fields;
+    try { fields = JSON.parse(String(form.get('fields'))); } catch { alert('Fields must be valid JSON.'); return; }
+    const payload = { title:String(form.get('title')).trim(), description:String(form.get('description')).trim(), category:String(form.get('category')).trim(), status:String(form.get('status')), fields, updatedAt:serverTimestamp() };
+    if (isEdit) await updateDoc(doc(db,'performanceTemplates',template.id),payload); else await addDoc(collection(db,'performanceTemplates'),{...payload,createdBy:auth.currentUser.uid,createdAt:serverTimestamp()});
+    cache = null; closeModal(); openPerformanceCenter('templates');
+  };
+}
+
+function workflowModal(data, workflow = null) {
+  const isEdit = Boolean(workflow);
+  modal(`<form id="performanceWorkflowForm"><div class="performance-modal-head"><div><p>WORKFLOW BUILDER</p><h2>${isEdit ? 'Edit workflow' : 'Create workflow'}</h2></div><button type="button" data-performance-close>×</button></div><div class="performance-modal-body"><label>Title<input name="title" value="${esc(workflow?.title || '')}" required></label><label>Description<textarea name="description">${esc(workflow?.description || '')}</textarea></label><label>Status<select name="status"><option>ACTIVE</option><option ${workflow?.status === 'DRAFT' ? 'selected' : ''}>DRAFT</option><option ${workflow?.status === 'ARCHIVED' ? 'selected' : ''}>ARCHIVED</option></select></label><label>Steps as JSON<textarea name="steps" required>${esc(JSON.stringify(workflow?.steps || [], null, 2))}</textarea></label></div><div class="performance-modal-actions"><button type="button" class="performance-btn" data-performance-close>Cancel</button><button class="performance-btn primary">${isEdit ? 'Save workflow' : 'Create workflow'}</button></div></form>`);
+  document.getElementById('performanceWorkflowForm').onsubmit = async event => {
+    event.preventDefault(); const form = new FormData(event.currentTarget); let steps;
+    try { steps = JSON.parse(String(form.get('steps'))); } catch { alert('Steps must be valid JSON.'); return; }
+    const payload = { title:String(form.get('title')).trim(), description:String(form.get('description')).trim(), status:String(form.get('status')), steps, updatedAt:serverTimestamp() };
+    if (isEdit) await updateDoc(doc(db,'performanceWorkflows',workflow.id),payload); else await addDoc(collection(db,'performanceWorkflows'),{...payload,createdBy:auth.currentUser.uid,createdAt:serverTimestamp()});
+    cache = null; closeModal(); openPerformanceCenter('workflows');
   };
 }
 
 function reviewModal(data) {
-  const employeeOptions = data.accounts.filter(item => String(item.portalStatus || '').toUpperCase() === 'ACTIVE').map(item => `<option value="${item.id}">${esc(item.displayName || item.portalUsername || item.id)}</option>`).join('');
-  const templateOptions = data.templates.filter(item => String(item.status || 'ACTIVE').toUpperCase() !== 'ARCHIVED').map(item => `<option value="${item.id}">${esc(item.title || item.id)}</option>`).join('');
-  modal('Create performance review', `<label>Review title<input name="title" required placeholder="Quarterly Performance Review"></label><label>Employee<select name="employeeUid" required><option value="">Select employee</option>${employeeOptions}</select></label><label>Template<select name="templateId" required><option value="">Select template</option>${templateOptions}</select></label><label>Due date<input name="dueDate" type="date" required></label><label class="full">Instructions<textarea name="instructions" placeholder="Instructions for the employee and reviewers"></textarea></label>`, async form => {
-    const template = data.templates.find(item => item.id === form.get('templateId'));
-    const workflow = data.workflows.find(item => item.id === template?.workflowId);
-    if (!template) throw new Error('Select a valid template.');
-    if (!workflow || !(workflow.steps || []).length) throw new Error('The selected template must have a workflow with at least one step.');
-    const steps = workflow.steps.map((step, index) => ({ ...step, order: index + 1, status: index === 0 ? 'PENDING' : 'LOCKED', assignedToUid: '' }));
-    const first = steps[0];
-    const eligible = eligibleAccounts(data, first.requiredPermission);
-    const assigned = eligible.length === 1 ? eligible[0] : null;
-    const employeeUid = String(form.get('employeeUid'));
-    await addDoc(collection(db, 'performanceReviews'), {
-      title: String(form.get('title')).trim(), employeeUid,
-      employeeName: displayNameFor(data, employeeUid), templateId: template.id, templateTitle: template.title || '',
-      workflowId: workflow.id, workflowTitle: workflow.title || '', workflowSteps: steps,
-      currentStepIndex: 0, currentStepName: first.name, currentRequiredPermission: first.requiredPermission,
-      currentAssignedToUid: assigned?.id || '', currentAssignedToName: assigned ? displayNameFor(data, assigned.id) : '',
-      status: assigned ? 'ASSIGNED' : 'AWAITING_ASSIGNMENT', instructions: String(form.get('instructions') || '').trim(),
-      responses: {}, overallScore: null, dueDate: Timestamp.fromDate(new Date(`${form.get('dueDate')}T12:00:00`)),
-      createdBy: auth.currentUser.uid, createdByName: account?.displayName || account?.portalUsername || '', createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-    });
-  }, true);
+  const templates = data.templates.filter(item => String(item.status || '').toUpperCase() === 'ACTIVE');
+  const employees = data.accounts.filter(item => String(item.portalStatus || '').toUpperCase() === 'ACTIVE');
+  modal(`<form id="performanceReviewForm"><div class="performance-modal-head"><div><p>ASSIGN FORM</p><h2>Assign a form</h2></div><button type="button" data-performance-close>×</button></div><div class="performance-modal-body performance-two"><label>Form<select name="templateId" required><option value="">Select…</option>${templates.map(item => `<option value="${item.id}">${esc(item.title)}</option>`).join('')}</select></label><label>Assign to<select name="employeeUid" required><option value="">Select…</option>${employees.map(item => `<option value="${item.id}">${esc(item.displayName || item.portalUsername || item.id)}</option>`).join('')}</select></label><label>Due date<input type="date" name="dueDate"></label><label>Reviewer permission<input name="reviewPermission" value="performance.review.evaluate"></label><label>Title<input name="title" placeholder="Defaults to form title"></label><label>Instructions<textarea name="notes"></textarea></label></div><div class="performance-modal-actions"><button type="button" class="performance-btn" data-performance-close>Cancel</button><button class="performance-btn primary">Assign form</button></div></form>`);
+  document.getElementById('performanceReviewForm').onsubmit = async event => {
+    event.preventDefault(); const form = new FormData(event.currentTarget); const template = data.templates.find(item => item.id === form.get('templateId')); const employeeUid = String(form.get('employeeUid')); const employee = data.accounts.find(item => item.id === employeeUid); const permission = String(form.get('reviewPermission')).trim(); const eligible = eligibleAccounts(data, permission); const due = String(form.get('dueDate'));
+    const payload = { templateId:template.id, templateSnapshot:{title:template.title,fields:template.fields || [],category:template.category || 'General'}, title:String(form.get('title')).trim() || template.title, employeeUid, employeeName:employee?.displayName || employee?.portalUsername || employeeUid, status:'ASSIGNED', responses:{}, workflowSteps:[], currentStepIndex:0, currentStepName:'Complete form', currentRequiredPermission:'performance.review.self_complete', currentAssignedToUid:employeeUid, currentAssignedToName:employee?.displayName || employee?.portalUsername || employeeUid, reviewerPermission:permission, reviewerCandidates:eligible.map(item => item.id), dueDate:due ? Timestamp.fromDate(new Date(`${due}T12:00:00`)) : null, notes:String(form.get('notes')).trim(), createdBy:auth.currentUser.uid, createdAt:serverTimestamp(), updatedAt:serverTimestamp() };
+    await addDoc(collection(db,'performanceReviews'),payload); cache = null; closeModal(); openPerformanceCenter('all');
+  };
 }
 
-function templateModal(data, template = null) {
-  const workflowOptions = data.workflows.map(item => `<option value="${item.id}" ${template?.workflowId === item.id ? 'selected' : ''}>${esc(item.title || item.id)}</option>`).join('');
-  const fieldLines = (template?.fields || []).map(field => `${field.type}|${field.label}|${field.required ? 'required' : 'optional'}|${field.weight || 0}`).join('\n');
-  modal(template ? 'Edit review template' : 'Create review template', `<label>Template title<input name="title" value="${esc(template?.title || '')}" required></label><label>Category<input name="category" value="${esc(template?.category || 'Performance Review')}" required></label><label>Workflow<select name="workflowId" required><option value="">Select workflow</option>${workflowOptions}</select></label><label>Status<select name="status"><option ${template?.status === 'DRAFT' ? 'selected' : ''}>DRAFT</option><option ${template?.status === 'ACTIVE' ? 'selected' : ''}>ACTIVE</option><option ${template?.status === 'ARCHIVED' ? 'selected' : ''}>ARCHIVED</option></select></label><label class="full">Description<textarea name="description">${esc(template?.description || '')}</textarea></label><label class="full">Form fields <small>One per line: type|label|required/optional|weight. Types: text, paragraph, rating, number, choice, checkbox, date.</small><textarea name="fields" required placeholder="rating|Professionalism|required|20\nparagraph|Reviewer comments|required|0">${esc(fieldLines)}</textarea></label>`, async form => {
-    const fields = String(form.get('fields')).split('\n').map((line, index) => {
-      const [type, label, requirement, weight] = line.split('|').map(value => value?.trim());
-      return { id: `field_${index + 1}`, type: type || 'text', label: label || `Field ${index + 1}`, required: String(requirement).toLowerCase() === 'required', weight: Number(weight || 0) };
-    }).filter(field => field.label);
-    const payload = { title: String(form.get('title')).trim(), category: String(form.get('category')).trim(), workflowId: String(form.get('workflowId')), status: String(form.get('status')), description: String(form.get('description') || '').trim(), fields, updatedAt: serverTimestamp() };
-    if (template) await updateDoc(doc(db, 'performanceTemplates', template.id), payload);
-    else await addDoc(collection(db, 'performanceTemplates'), { ...payload, createdBy: auth.currentUser.uid, createdAt: serverTimestamp() });
-  }, true);
+async function openReviewModal(data, id) {
+  const review = data.reviews.find(item => item.id === id) || (await getDoc(doc(db,'performanceReviews',id))).data();
+  const uid = auth.currentUser.uid;
+  const isEmployee = review.employeeUid === uid;
+  const canAct = review.currentAssignedToUid === uid || (!review.currentAssignedToUid && userCanHandlePermission(review.currentRequiredPermission));
+  const fields = review.templateSnapshot?.fields || [];
+  modal(`<form id="performanceOpenReviewForm"><div class="performance-modal-head"><div><p>FORM</p><h2>${esc(review.title || 'Assigned Form')}</h2><span>${esc(review.employeeName || displayNameFor(data,review.employeeUid))}</span></div><button type="button" data-performance-close>×</button></div><div class="performance-modal-body"><div class="performance-review-summary">${badge(review.status)}<span>Due ${dateText(review.dueDate)}</span><span>Current: ${esc(review.currentStepName || 'Not started')}</span></div>${fields.map((field,index) => renderField(field,index,review.responses?.[index],isEmployee && canAct)).join('') || '<div class="performance-empty">This form has no fields.</div>'}<label>Reviewer notes<textarea name="managerNotes" ${!canEvaluate() && !canManage() ? 'disabled' : ''}>${esc(review.managerNotes || '')}</textarea></label></div><div class="performance-modal-actions"><button type="button" class="performance-btn" data-performance-close>Close</button>${isEmployee && canAct ? '<button class="performance-btn" name="action" value="save">Save draft</button><button class="performance-btn primary" name="action" value="submit">Submit form</button>' : ''}${!isEmployee && canAct && (canEvaluate() || canApprove() || canFinalize()) ? '<button class="performance-btn danger" name="action" value="changes">Request changes</button><button class="performance-btn primary" name="action" value="approve">Approve</button>' : ''}</div></form>`);
+  document.getElementById('performanceOpenReviewForm').onsubmit = event => saveReviewAction(event,review,fields,data);
 }
 
-function workflowModal(data, workflow = null) {
-  const stepLines = (workflow?.steps || []).map(step => `${step.name}|${step.requiredPermission}`).join('\n');
-  modal(workflow ? 'Edit approval workflow' : 'Create approval workflow', `<label>Workflow title<input name="title" value="${esc(workflow?.title || '')}" required></label><label>Status<select name="status"><option ${workflow?.status === 'ACTIVE' ? 'selected' : ''}>ACTIVE</option><option ${workflow?.status === 'DRAFT' ? 'selected' : ''}>DRAFT</option><option ${workflow?.status === 'ARCHIVED' ? 'selected' : ''}>ARCHIVED</option></select></label><label class="full">Description<textarea name="description">${esc(workflow?.description || '')}</textarea></label><label class="full">Workflow steps <small>One per line: step name|required permission</small><textarea name="steps" required placeholder="Reviewer Evaluation|performance.review.evaluate\nAdministrative Approval|performance.review.approve\nFinalization|performance.review.finalize">${esc(stepLines)}</textarea></label>`, async form => {
-    const steps = String(form.get('steps')).split('\n').map((line, index) => {
-      const [name, requiredPermission] = line.split('|').map(value => value?.trim());
-      if (!name || !requiredPermission) return null;
-      return { id: `step_${index + 1}`, order: index + 1, name, requiredPermission };
-    }).filter(Boolean);
-    if (!steps.length) throw new Error('Add at least one valid workflow step.');
-    const payload = { title: String(form.get('title')).trim(), status: String(form.get('status')), description: String(form.get('description') || '').trim(), steps, updatedAt: serverTimestamp() };
-    if (workflow) await updateDoc(doc(db, 'performanceWorkflows', workflow.id), payload);
-    else await addDoc(collection(db, 'performanceWorkflows'), { ...payload, createdBy: auth.currentUser.uid, createdAt: serverTimestamp() });
-  }, true);
-}
-
-function reviewDetailModal(data, review) {
-  if (!review) return;
-  const step = (review.workflowSteps || [])[review.currentStepIndex || 0];
-  const eligible = eligibleAccounts(data, review.currentRequiredPermission || step?.requiredPermission || '');
-  const assignmentOptions = eligible.map(item => `<option value="${item.id}" ${review.currentAssignedToUid === item.id ? 'selected' : ''}>${esc(displayNameFor(data, item.id))}</option>`).join('');
-  const template = data.templates.find(item => item.id === review.templateId);
-  const fields = template?.fields || [];
-  const responseFields = fields.map(field => renderResponseField(field, review.responses?.[field.id])).join('');
-  const mayAct = review.currentAssignedToUid === auth.currentUser?.uid && userCanHandlePermission(review.currentRequiredPermission);
-  const mayAssign = canManage() || canCreate();
-  modal(review.title || 'Performance Review', `<div class="performance-review-summary"><div>${badge(review.status)}<h3>${esc(review.employeeName || displayNameFor(data, review.employeeUid))}</h3><p>${esc(review.instructions || 'Complete the assigned review stage.')}</p></div></div><div class="performance-workflow-track">${(review.workflowSteps || []).map((item,index) => `<div class="${index === review.currentStepIndex ? 'current' : ''} ${item.status === 'COMPLETED' ? 'done' : ''}"><strong>${index + 1}. ${esc(item.name)}</strong><span>${esc(item.requiredPermission)}</span></div>`).join('')}</div>${mayAssign ? `<label>Assigned reviewer<select name="assignedToUid"><option value="">Unassigned</option>${assignmentOptions}</select></label>` : ''}<div class="performance-form-fields">${responseFields || '<p class="performance-empty">This template has no fields.</p>'}</div>${mayAct ? '<label class="full">Stage notes<textarea name="stageNotes" placeholder="Document your findings or decision"></textarea></label>' : ''}<input type="hidden" name="reviewAction" value="save">`, async form => {
-    const responses = { ...(review.responses || {}) };
-    fields.forEach(field => {
-      const value = form.get(`field_${field.id}`);
-      if (value !== null) responses[field.id] = value;
-    });
-    const updates = { responses, updatedAt: serverTimestamp() };
-    const assignedToUid = String(form.get('assignedToUid') || review.currentAssignedToUid || '');
-    if (mayAssign && assignedToUid !== review.currentAssignedToUid) {
-      updates.currentAssignedToUid = assignedToUid;
-      updates.currentAssignedToName = displayNameFor(data, assignedToUid);
-      updates.status = assignedToUid ? 'ASSIGNED' : 'AWAITING_ASSIGNMENT';
-    }
-    if (mayAct && confirm('Complete this workflow stage and advance the review?')) {
-      const steps = [...(review.workflowSteps || [])];
-      const index = review.currentStepIndex || 0;
-      steps[index] = { ...steps[index], status: 'COMPLETED', completedBy: auth.currentUser.uid, completedByName: account?.displayName || account?.portalUsername || '', completedAt: new Date().toISOString(), notes: String(form.get('stageNotes') || '').trim() };
-      const next = steps[index + 1];
-      if (next) {
-        steps[index + 1] = { ...next, status: 'PENDING' };
-        const nextEligible = eligibleAccounts(data, next.requiredPermission);
-        const nextAssigned = nextEligible.length === 1 ? nextEligible[0] : null;
-        Object.assign(updates, { workflowSteps: steps, currentStepIndex: index + 1, currentStepName: next.name, currentRequiredPermission: next.requiredPermission, currentAssignedToUid: nextAssigned?.id || '', currentAssignedToName: nextAssigned ? displayNameFor(data, nextAssigned.id) : '', status: nextAssigned ? 'ASSIGNED' : 'AWAITING_ASSIGNMENT' });
-      } else {
-        const scores = fields.filter(field => ['rating','number'].includes(field.type)).map(field => Number(responses[field.id] || 0)).filter(Number.isFinite);
-        Object.assign(updates, { workflowSteps: steps, status: 'COMPLETED', completedAt: serverTimestamp(), completedBy: auth.currentUser.uid, currentAssignedToUid: '', currentAssignedToName: '', currentStepName: 'Completed', currentRequiredPermission: '', overallScore: scores.length ? Math.round(scores.reduce((a,b) => a+b,0) / scores.length) : null });
-      }
-    }
-    await updateDoc(doc(db, 'performanceReviews', review.id), updates);
-  }, true);
-}
-
-function renderResponseField(field, value = '') {
+function renderField(field,index,value,editable) {
+  const label = esc(field.label || field.title || `Question ${index+1}`);
+  const type = String(field.type || 'text').toLowerCase();
   const required = field.required ? 'required' : '';
-  const name = `field_${field.id}`;
-  if (field.type === 'paragraph') return `<label class="full">${esc(field.label)}<textarea name="${name}" ${required}>${esc(value)}</textarea></label>`;
-  if (field.type === 'rating' || field.type === 'number') return `<label>${esc(field.label)}<input name="${name}" type="number" min="0" max="100" value="${esc(value)}" ${required}></label>`;
-  if (field.type === 'date') return `<label>${esc(field.label)}<input name="${name}" type="date" value="${esc(value)}" ${required}></label>`;
-  if (field.type === 'checkbox') return `<label class="performance-checkbox"><input name="${name}" type="checkbox" value="true" ${String(value) === 'true' ? 'checked' : ''}>${esc(field.label)}</label>`;
-  return `<label>${esc(field.label)}<input name="${name}" value="${esc(value)}" ${required}></label>`;
+  if (type === 'textarea' || type === 'long_text') return `<label>${label}<textarea name="field_${index}" ${editable ? '' : 'disabled'} ${required}>${esc(value || '')}</textarea></label>`;
+  if (type === 'select' || type === 'dropdown') return `<label>${label}<select name="field_${index}" ${editable ? '' : 'disabled'} ${required}><option value="">Select…</option>${(field.options || []).map(option => `<option ${String(value)===String(option)?'selected':''}>${esc(option)}</option>`).join('')}</select></label>`;
+  if (type === 'number' || type === 'date') return `<label>${label}<input type="${type}" name="field_${index}" value="${esc(value || '')}" ${editable ? '' : 'disabled'} ${required}></label>`;
+  return `<label>${label}<input name="field_${index}" value="${esc(value || '')}" ${editable ? '' : 'disabled'} ${required}></label>`;
 }
 
-async function removeRecord(collectionName, id, label) {
-  if (!confirm(`Permanently delete this ${label}?`)) return;
-  try {
-    await deleteDoc(doc(db, collectionName, id));
-    cache = null;
-    await openPerformanceCenter(currentTab);
-  } catch (error) {
-    console.error(error);
-    alert(`Unable to delete: ${error.code || error.message}`);
-  }
+async function saveReviewAction(event, review, fields, data) {
+  event.preventDefault(); const action = event.submitter?.value || 'save'; const form = new FormData(event.currentTarget); const responses = {};
+  fields.forEach((_,index) => { responses[index] = form.get(`field_${index}`) ?? review.responses?.[index] ?? ''; });
+  const managerNotes = String(form.get('managerNotes') || '');
+  const payload = { responses, managerNotes, updatedAt:serverTimestamp() };
+  if (action === 'save') Object.assign(payload,{status:'IN_PROGRESS'});
+  if (action === 'submit') Object.assign(payload,{status:'AWAITING_REVIEW',currentStepName:'Review submission',currentRequiredPermission:review.reviewerPermission || 'performance.review.evaluate',currentAssignedToUid:'',currentAssignedToName:'' ,submittedAt:serverTimestamp()});
+  if (action === 'changes') Object.assign(payload,{status:'CHANGES_REQUESTED',currentStepName:'Update form',currentRequiredPermission:'performance.review.self_complete',currentAssignedToUid:review.employeeUid,currentAssignedToName:review.employeeName,reviewedAt:serverTimestamp(),reviewedBy:auth.currentUser.uid});
+  if (action === 'approve') Object.assign(payload,{status:'COMPLETED',currentStepName:'Completed',currentRequiredPermission:'',currentAssignedToUid:'',currentAssignedToName:'',completedAt:serverTimestamp(),reviewedAt:serverTimestamp(),reviewedBy:auth.currentUser.uid});
+  await updateDoc(doc(db,'performanceReviews',review.id),payload); cache=null; closeModal(); openPerformanceCenter(action === 'submit' || action === 'save' ? 'my-reviews' : 'queue');
 }
 
-let navTimer;
-function scheduleNav() { clearTimeout(navTimer); navTimer = setTimeout(navButton, 80); }
-new MutationObserver(scheduleNav).observe(document.getElementById('app'), { childList: true, subtree: true });
+async function deleteTemplate(id) { if (!confirm('Delete this form?')) return; await deleteDoc(doc(db,'performanceTemplates',id)); cache=null; openPerformanceCenter('templates'); }
+async function deleteWorkflow(id) { if (!confirm('Delete this workflow?')) return; await deleteDoc(doc(db,'performanceWorkflows',id)); cache=null; openPerformanceCenter('workflows'); }
+
 onAuthStateChanged(auth, async user => {
-  if (!user || user.isAnonymous) return;
-  try {
-    const snap = await getDoc(doc(db, 'portalAccounts', user.uid));
-    account = snap.exists() ? snap.data() : null;
-    scheduleNav();
-  } catch (error) {
-    console.error('Unable to initialize Performance Center', error);
-  }
+  if (!user) return;
+  try { account = (await getDoc(doc(db,'portalAccounts',user.uid))).data(); } catch { account = null; }
+  navButton();
+  const observer = new MutationObserver(navButton);
+  observer.observe(document.documentElement,{childList:true,subtree:true});
 });
